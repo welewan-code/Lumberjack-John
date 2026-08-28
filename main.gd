@@ -25,6 +25,8 @@ var state: Dictionary = {
 
 var current_tab: String = "PRÁCE"
 var content_host: MarginContainer
+var left_panel: PanelContainer
+var right_panel: PanelContainer
 var money_label: Label
 var roundwood_label: Label
 var split_label: Label
@@ -112,8 +114,8 @@ func build_top(parent: VBoxContainer) -> void:
 	split_label=make_label("0.000 m³\nŠtípané dřevo",18); m4.add_child(split_label)
 
 func build_left(parent: HBoxContainer) -> void:
-	var panel:=PanelContainer.new(); panel.custom_minimum_size.x=274; panel.add_theme_stylebox_override("panel",panel_style("#1b1713")); parent.add_child(panel)
-	var margin:=MarginContainer.new(); margin.add_theme_constant_override("margin_left",12); margin.add_theme_constant_override("margin_right",12); margin.add_theme_constant_override("margin_top",12); margin.add_theme_constant_override("margin_bottom",12); panel.add_child(margin)
+	left_panel=PanelContainer.new(); left_panel.custom_minimum_size.x=274; left_panel.add_theme_stylebox_override("panel",panel_style("#1b1713")); parent.add_child(left_panel)
+	var margin:=MarginContainer.new(); margin.add_theme_constant_override("margin_left",12); margin.add_theme_constant_override("margin_right",12); margin.add_theme_constant_override("margin_top",12); margin.add_theme_constant_override("margin_bottom",12); left_panel.add_child(margin)
 	var box:=VBoxContainer.new(); box.add_theme_constant_override("separation",12); margin.add_child(box)
 	var title:=make_label("PRÁCE",24); title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; box.add_child(title)
 	var shift:=PanelContainer.new(); shift.add_theme_stylebox_override("panel",panel_style("#1a1714","#5f4027")); box.add_child(shift)
@@ -124,8 +126,8 @@ func build_left(parent: HBoxContainer) -> void:
 	var ov:=VBoxContainer.new(); om.add_child(ov); ov.add_child(make_label("Vlastní firma",16)); ov.add_child(make_label("Volný čas můžeš využít na\nvlastní zakázky v záložce\nFIRMA.",14))
 
 func build_right(parent: HBoxContainer) -> void:
-	var panel:=PanelContainer.new(); panel.custom_minimum_size.x=300; panel.add_theme_stylebox_override("panel",panel_style("#1b1713")); parent.add_child(panel)
-	var margin:=MarginContainer.new(); margin.add_theme_constant_override("margin_left",12); margin.add_theme_constant_override("margin_right",12); margin.add_theme_constant_override("margin_top",12); margin.add_theme_constant_override("margin_bottom",12); panel.add_child(margin)
+	right_panel=PanelContainer.new(); right_panel.custom_minimum_size.x=300; right_panel.add_theme_stylebox_override("panel",panel_style("#1b1713")); parent.add_child(right_panel)
+	var margin:=MarginContainer.new(); margin.add_theme_constant_override("margin_left",12); margin.add_theme_constant_override("margin_right",12); margin.add_theme_constant_override("margin_top",12); margin.add_theme_constant_override("margin_bottom",12); right_panel.add_child(margin)
 	var box:=VBoxContainer.new(); box.add_theme_constant_override("separation",12); margin.add_child(box)
 	var title:=make_label("PRÁCE",24); title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; box.add_child(title)
 	var current:=PanelContainer.new(); current.add_theme_stylebox_override("panel",panel_style("#1a1714","#9a632c",7,2)); box.add_child(current)
@@ -148,10 +150,15 @@ func clear_content() -> void:
 func show_tab(tab:String) -> void:
 	current_tab=tab
 	clear_content()
+	var is_work: bool = tab == "PRÁCE"
+	if is_instance_valid(left_panel): left_panel.visible = is_work
+	if is_instance_valid(right_panel): right_panel.visible = is_work
 	if tab=="PRÁCE":
 		render_work()
 	elif tab=="OBCHOD":
 		call_deferred("_open_shop")
+	elif tab=="FIRMA":
+		render_company()
 	else:
 		render_placeholder(tab)
 
@@ -161,6 +168,24 @@ func _open_shop() -> void:
 		shop.call("_render_shop")
 	else:
 		render_placeholder("OBCHOD")
+
+func render_company() -> void:
+	var panel:=PanelContainer.new()
+	panel.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	panel.size_flags_vertical=Control.SIZE_EXPAND_FILL
+	panel.add_theme_stylebox_override("panel",panel_style("#211914","#6b4628",7,1))
+	content_host.add_child(panel)
+	var box:=VBoxContainer.new()
+	box.alignment=BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation",10)
+	panel.add_child(box)
+	var title:=make_label("FIRMA",32)
+	title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_color_override("font_color",Color("#ffca42"))
+	box.add_child(title)
+	var info:=make_label("Firemní záložka je připravená jako samostatná obrazovka.\nObsah firmy doplníme zvlášť, práce už se sem nepřekresluje.",17)
+	info.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(info)
 
 func render_work() -> void:
 	var center:=PanelContainer.new(); center.size_flags_horizontal=Control.SIZE_EXPAND_FILL; center.size_flags_vertical=Control.SIZE_EXPAND_FILL; center.add_theme_stylebox_override("panel",panel_style("#6f5a3f","#8b5d32",0,1)); content_host.add_child(center)
