@@ -1,6 +1,9 @@
 extends Node
 
-const LEVEL_XP: Array[int] = [0,100,250,450,700,1000,1400,1900,2500,3200,4000]
+# Celkové XP hranice podle nové tabulky:
+# LVL 1 = 0, 2 = 100, 3 = 250, 4 = 500, 5 = 900,
+# 6 = 1550, 7 = 2550, 8 = 4050, 9 = 6250, 10 = 9450.
+const LEVEL_TOTAL_XP: Array[int] = [0, 0, 100, 250, 500, 900, 1550, 2550, 4050, 6250, 9450]
 const JOB_ORDER: Array[String] = ["helper", "warehouse", "sawmill", "logger", "driver"]
 const JOBS: Dictionary = {
 	"helper": {
@@ -8,7 +11,7 @@ const JOBS: Dictionary = {
 		"desc": "Pomocné práce se dřevem.",
 		"pay_min": 1, "pay_max": 3,
 		"xp_min": 1, "xp_max": 5,
-		"level": 0
+		"level": 1
 	},
 	"warehouse": {
 		"name": "Skladník dřeva",
@@ -59,6 +62,7 @@ func _process(_delta: float) -> void:
 			watched_button.pressed.connect(_on_work_pressed)
 	_find_accept_button(main)
 	_refresh_work_ui(main)
+	_refresh_xp_bar(main)
 
 func _on_work_pressed() -> void:
 	if reward_pending:
@@ -90,11 +94,51 @@ func _on_work_pressed() -> void:
 	reward_pending = false
 
 func level_from_xp(xp: int) -> int:
-	var result: int = 0
-	for i in range(1, LEVEL_XP.size()):
-		if xp >= LEVEL_XP[i]:
-			result = i
-	return mini(result, 10)
+	var result: int = 1
+	for level in range(2, 11):
+		if xp >= LEVEL_TOTAL_XP[level]:
+			result = level
+	return result
+
+func _refresh_xp_bar(main: Node) -> void:
+	var state_value = main.get("state")
+	if not (state_value is Dictionary):
+		return
+	var state: Dictionary = state_value
+	var total_xp: int = int(state.get("xp", 0))
+	var level: int = level_from_xp(total_xp)
+	state["level"] = level
+	main.set("state", state)
+
+	var xp_label_node = main.get("xp_label")
+	if not (xp_label_node is Label):
+		return
+	var xp_label: Label = xp_label_node as Label
+	var parent := xp_label.get_parent()
+	var xp_bar: ProgressBar = null
+	if parent != null:
+		for child in parent.get_children():
+			if child is ProgressBar:
+				xp_bar = child as ProgressBar
+				break
+
+	if level >= 10:
+		xp_label.text = "%d XP  •  LVL 10 MAX" % total_xp
+		if xp_bar != null:
+			xp_bar.min_value = 0.0
+			xp_bar.max_value = 1.0
+			xp_bar.value = 1.0
+		return
+
+	var current_floor: int = LEVEL_TOTAL_XP[level]
+	var next_total: int = LEVEL_TOTAL_XP[level + 1]
+	var gained_this_level: int = total_xp - current_floor
+	var needed_this_level: int = next_total - current_floor
+	xp_label.text = "%d / %d XP do LVL %d" % [gained_this_level, needed_this_level, level + 1]
+	if xp_bar != null:
+		xp_bar.min_value = 0.0
+		xp_bar.max_value = float(needed_this_level)
+		xp_bar.value = float(gained_this_level)
 
 func _next_job_id(current_job: String) -> String:
 	var index: int = JOB_ORDER.find(current_job)
@@ -106,7 +150,7 @@ func _next_job_id(current_job: String) -> String:
 
 func _find_accept_button(root: Node) -> void:
 	for node in _all_nodes(root):
-		if node is Button and (node as Button).text == "PŘIJMOUT PRÁCI":
+		if node is Button and ((node as Button).text == "PŘIJMOUT PRÁCI" or (node as Button).text.begins_with("LVL ") or (node as Button).text == "NEJVYŠŠÍ POZICE"):
 			var b := node as Button
 			if b != watched_accept:
 				watched_accept = b
@@ -137,6 +181,7 @@ func _accept_next_job() -> void:
 	main.call("update_hud")
 	main.call("save_game")
 	_refresh_work_ui(main)
+	_refresh_xp_bar(main)
 
 func _refresh_work_ui(main: Node) -> void:
 	var state_value = main.get("state")
@@ -152,17 +197,15 @@ func _refresh_work_ui(main: Node) -> void:
 	state["level"] = level
 	main.set("state", state)
 
-	# Horní role.
 	var role = main.get("role_label")
 	if role is Label:
-		(role as Label).text = str(job["name"])
+		(role as Label).text = "%s  •  LVL %d" % [str(job["name"]), level]
 
 	var labels: Array[Label] = []
 	for node in _all_nodes(main):
 		if node is Label:
 			labels.append(node as Label)
 
-	# Pravý panel aktuální práce — přepisujeme známé texty bez zásahu do layoutu.
 	var found_current_name := false
 	var found_current_desc := false
 	var found_pay := false
@@ -186,7 +229,6 @@ func _refresh_work_ui(main: Node) -> void:
 			label.text = "Směna: %d/8" % int(state.get("work_clicks", 0))
 			found_shift = true
 
-	# Nabídka další práce.
 	if next_id != "" and JOBS.has(next_id):
 		var next_job: Dictionary = JOBS[next_id]
 		var offer_name_done := false
