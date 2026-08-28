@@ -147,7 +147,15 @@ func build_bottom(parent: VBoxContainer) -> void:
 func clear_content() -> void:
 	for child:Node in content_host.get_children(): child.queue_free()
 
+func _clear_work_refs() -> void:
+	action_running = false
+	chop_button = null
+	timer_label = null
+	progress = null
+
 func show_tab(tab:String) -> void:
+	if tab != "PRÁCE":
+		_clear_work_refs()
 	current_tab=tab
 	clear_content()
 	var is_work: bool = tab == "PRÁCE"
@@ -239,10 +247,11 @@ func start_chop() -> void:
 
 func finish_chop() -> void:
 	action_running=false
-	chop_button.disabled=false
-	chop_button.text="SEKNOUT"
-	progress.value=0.0
-	timer_label.text=timer_text()
+	if is_instance_valid(chop_button):
+		chop_button.disabled=false
+		chop_button.text="SEKNOUT"
+	if is_instance_valid(progress): progress.value=0.0
+	if is_instance_valid(timer_label): timer_label.text=timer_text()
 	save_game()
 	update_hud()
 
