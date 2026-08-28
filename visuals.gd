@@ -4,6 +4,7 @@ const SHOP_CATEGORY_LABELS: Array[String] = ["SEKERY", "PILY", "DOPRAVNÍ PROST�
 const COMPANY_BG_CANDIDATES: Array[String] = [
 	"res://assets/backgrounds/company_yard.png",
 	"res://assets/backgrounds/sluncem_zalitý_dvůr_venkovské_chalupy.png",
+	"res://assets/backgrounds/sluncem_zality_dvur_venkovske_chalupy.png",
 	"res://assets/sluncem_zalitý_dvůr_venkovské_chalupy.png"
 ]
 
@@ -23,19 +24,42 @@ func _build_company_background() -> void:
 	company_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	company_background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	company_background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	company_background.set_anchors_preset(Control.PRESET_FULL_RECT)
+	company_background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	company_background.offset_top = 84.0
 	company_background.offset_bottom = -58.0
 	company_background.z_index = 10
 	company_background.visible = false
 	add_child(company_background)
 
+	var texture := _load_company_background_texture()
+	if texture != null:
+		company_background.texture = texture
+
+func _load_company_background_texture() -> Texture2D:
 	for path in COMPANY_BG_CANDIDATES:
 		if ResourceLoader.exists(path):
 			var resource := ResourceLoader.load(path)
 			if resource is Texture2D:
-				company_background.texture = resource as Texture2D
-				break
+				return resource as Texture2D
+
+	# Fallback: vezmi první obrázek ze složky backgrounds, i když má jiný název.
+	var dir := DirAccess.open("res://assets/backgrounds")
+	if dir != null:
+		dir.list_dir_begin()
+		var file_name := dir.get_next()
+		while file_name != "":
+			if not dir.current_is_dir():
+				var lower := file_name.to_lower()
+				if lower.ends_with(".png") or lower.ends_with(".jpg") or lower.ends_with(".jpeg") or lower.ends_with(".webp"):
+					var path := "res://assets/backgrounds/" + file_name
+					if ResourceLoader.exists(path):
+						var resource := ResourceLoader.load(path)
+						if resource is Texture2D:
+							dir.list_dir_end()
+							return resource as Texture2D
+			file_name = dir.get_next()
+		dir.list_dir_end()
+	return null
 
 func _process(_delta: float) -> void:
 	if game == null:
@@ -46,6 +70,11 @@ func _process(_delta: float) -> void:
 		tab = str(game.current_tab)
 
 	if is_instance_valid(company_background):
+		# Když obrázek Godot naimportuje až po startu editoru, zkus ho znovu načíst.
+		if tab == "FIRMA" and company_background.texture == null:
+			var texture := _load_company_background_texture()
+			if texture != null:
+				company_background.texture = texture
 		company_background.visible = tab == "FIRMA" and company_background.texture != null
 
 	if tab != "OBCHOD":
