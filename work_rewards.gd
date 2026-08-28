@@ -32,10 +32,13 @@ func _process(delta: float) -> void:
 		return
 
 	var button = main.get("chop_button")
-	if button is Button and button != watched_button:
-		watched_button = button as Button
-		if not watched_button.pressed.is_connected(_on_work_pressed):
-			watched_button.pressed.connect(_on_work_pressed)
+	if button is Button and is_instance_valid(button):
+		if button != watched_button:
+			watched_button = button as Button
+			if not watched_button.pressed.is_connected(_on_work_pressed):
+				watched_button.pressed.connect(_on_work_pressed)
+	else:
+		watched_button = null
 
 	_find_accept_button(main)
 	_ensure_offer(main)
@@ -68,18 +71,25 @@ func _on_work_pressed() -> void:
 			if not JOBS.has(job_id):
 				job_id = "helper"
 			var job: Dictionary = JOBS[job_id]
-			var pay: int = randi_range(int(job["pay_min"]), int(job["pay_max"]))
+
+			# 10-action cycle: 1-8 normal shift, 9-10 overtime at exactly +20% pay.
+			var cycle_pos: int = int(state.get("work_clicks", 0)) % 10
+			var action_number: int = cycle_pos + 1
+			var is_overtime: bool = action_number >= 9
+			var base_pay: int = randi_range(int(job["pay_min"]), int(job["pay_max"]))
+			var pay: float = float(base_pay) * (1.2 if is_overtime else 1.0)
 			var xp_gain: int = randi_range(int(job["xp_min"]), int(job["xp_max"]))
+
 			state["money"] = float(state.get("money", 0.0)) + pay
 			state["xp"] = int(state.get("xp", 0)) + xp_gain
-			state["work_clicks"] = int(state.get("work_clicks", 0)) + 1
+			state["work_clicks"] = 0 if action_number >= 10 else action_number
 			state["level"] = level_from_xp(int(state["xp"]))
 			main.set("state", state)
 			main.call("update_hud")
 			main.call("save_game")
 			_refresh_xp_bar(main)
 			_refresh_work_ui(main)
-			_spawn_reward_feedback(main, pay, xp_gain)
+			_spawn_reward_feedback(main, pay, xp_gain, is_overtime)
 	reward_pending = false
 
 func _ensure_axe_overlay(main: Node) -> void:
@@ -113,7 +123,7 @@ func _ensure_axe_overlay(main: Node) -> void:
 
 	if axe_equipped_id != equipped:
 		axe_equipped_id = equipped
-		var tool_path := "res://assets/tools/wooden_axe.png"
+		var tool_path: String = "res://assets/tools/wooden_axe.png"
 		if equipped == "sharpened":
 			tool_path = "res://assets/tools/sharpened_axe.png"
 		if ResourceLoader.exists(tool_path):
@@ -196,14 +206,17 @@ func _find_player_texture(root: Node) -> TextureRect:
 					return texture_rect
 	return null
 
-func _spawn_reward_feedback(main: Node, pay: int, xp_gain: int) -> void:
+func _spawn_reward_feedback(main: Node, pay: float, xp_gain: int, is_overtime: bool) -> void:
 	if not (main is Control):
 		return
 	var root := main as Control
 	var viewport_size: Vector2 = root.get_viewport().get_visible_rect().size
 	var base_pos := Vector2(viewport_size.x * 0.50, viewport_size.y * 0.37)
-	_spawn_float_label(root, "+%d Kč" % pay, base_pos + Vector2(-70, 0), Color("#ffd24a"))
-	_spawn_float_label(root, "+%d XP" % xp_gain, base_pos + Vector2(55, 0), Color("#9ddf52"))
+	var pay_text: String = "+%.1f Kč" % pay if not is_equal_approx(pay, round(pay)) else "+%d Kč" % int(round(pay))
+	if is_overtime:
+		pay_text += "  PŘESČAS +20 %"
+	_spawn_float_label(root, pay_text, base_pos + Vector2(-100, 0), Color("#ffd24a"))
+	_spawn_float_label(root, "+%d XP" % xp_gain, base_pos + Vector2(80, 0), Color("#9ddf52"))
 	_pulse_label(main.get("money_label"))
 	_pulse_label(main.get("xp_label"))
 
@@ -262,14 +275,17 @@ func _roll_offer(main: Node) -> void:
 	offer_time_left = OFFER_DURATION
 
 func _find_accept_button(root: Node) -> void:
-	for node in _all_nodes(root):
+	watched_accept = null
+	var offer_root := _panel_root_from_heading(root, "NABÍDKA PRÁCE")
+	if offer_root == null:
+		return
+	for node in _all_nodes(offer_root):
 		if node is Button:
 			var b := node as Button
 			if b.text == "PŘIJMOUT PRÁCI" or b.text.begins_with("LVL ") or b.text == "NEJVYŠŠÍ POZICE":
-				if b != watched_accept:
-					watched_accept = b
-					if not b.pressed.is_connected(_accept_offer):
-						b.pressed.connect(_accept_offer)
+				watched_accept = b
+				if not b.pressed.is_connected(_accept_offer):
+					b.pressed.connect(_accept_offer)
 				return
 
 func _accept_offer() -> void:
@@ -354,75 +370,83 @@ func _refresh_work_ui(main: Node) -> void:
 	var level: int = level_from_xp(int(state.get("xp", 0)))
 	state["level"] = level
 	main.set("state", state)
+
 	var role = main.get("role_label")
 	if role is Label:
 		(role as Label).text = "%s  •  LVL %d" % [str(job["name"]), level]
-	var labels: Array[Label] = []
-	for node in _all_nodes(main):
-		if node is Label:
-			labels.append(node as Label)
-	var current_name_done := false
-	var current_desc_done := false
-	var current_pay_done := false
-	var current_xp_done := false
-	var shift_done := false
-	for label in labels:
-		if label.text in ["Pomocník ve dřevárně", "Skladník dřeva", "Obsluha pily", "Dřevorubec", "Řidič"] and not current_name_done:
-			label.text = str(job["name"])
-			current_name_done = true
-		elif _is_job_desc(label.text) and not current_desc_done:
-			label.text = str(job["desc"])
-			current_desc_done = true
-		elif label.text.begins_with("Mzda:") and not current_pay_done:
-			label.text = "Mzda: %d–%d Kč / sek" % [int(job["pay_min"]), int(job["pay_max"])]
-			current_pay_done = true
-		elif label.text.begins_with("XP:") and not current_xp_done:
-			label.text = "XP: %d–%d XP / sek" % [int(job["xp_min"]), int(job["xp_max"])]
-			current_xp_done = true
-		elif label.text.begins_with("Směna:") and not shift_done:
-			label.text = "Směna: %d/8" % int(state.get("work_clicks", 0))
-			shift_done = true
+
+	# Update CURRENT JOB only inside the AKTUÁLNÍ PRÁCE panel.
+	var current_root := _panel_root_from_heading(main, "AKTUÁLNÍ PRÁCE")
+	if current_root != null:
+		var current_labels := _labels_in(current_root)
+		_set_first_job_name(current_labels, str(job["name"]))
+		_set_first_job_desc(current_labels, str(job["desc"]))
+		_set_first_prefix(current_labels, "Mzda:", "Mzda: %d–%d Kč / sek" % [int(job["pay_min"]), int(job["pay_max"])])
+		_set_first_prefix(current_labels, "XP:", "XP: %d–%d XP / sek" % [int(job["xp_min"]), int(job["xp_max"])])
+		var cycle_pos: int = int(state.get("work_clicks", 0)) % 10
+		var shift_text: String = "Směna: %d/8" % mini(cycle_pos, 8)
+		if cycle_pos == 8:
+			shift_text = "Přesčas: 0/2  •  další 2 seky +20 %"
+		elif cycle_pos == 9:
+			shift_text = "Přesčas: 1/2  •  mzda +20 %"
+		_set_first_prefix(current_labels, "Směna:", shift_text)
+		_set_first_prefix(current_labels, "Přesčas:", shift_text)
+
+	# Update OFFER only inside the NABÍDKA PRÁCE panel. It can no longer overwrite current job data.
 	if offer_job_id != "" and JOBS.has(offer_job_id):
 		var offer: Dictionary = JOBS[offer_job_id]
-		var offer_name_done := false
-		var offer_desc_done := false
-		var req_done := false
-		var pay_seen := 0
-		var xp_seen := 0
-		for label in labels:
-			if label.text in ["Pomocník ve dřevárně", "Skladník dřeva", "Obsluha pily", "Dřevorubec", "Řidič"] and not offer_name_done and label.text != str(job["name"]):
-				label.text = str(offer["name"])
-				offer_name_done = true
-			elif _is_job_desc(label.text) and label.text != str(job["desc"]) and not offer_desc_done:
-				label.text = str(offer["desc"])
-				offer_desc_done = true
-			elif label.text.begins_with("Požadovaný level:") and not req_done:
-				label.text = "Požadovaný level: %d" % int(offer["level"])
-				req_done = true
-			elif label.text.begins_with("Mzda:"):
-				pay_seen += 1
-				if pay_seen >= 2:
-					label.text = "Mzda: %d–%d Kč" % [int(offer["pay_min"]), int(offer["pay_max"])]
-			elif label.text.begins_with("XP:"):
-				xp_seen += 1
-				if xp_seen >= 2:
-					label.text = "XP: %d–%d XP" % [int(offer["xp_min"]), int(offer["xp_max"])]
+		var offer_root := _panel_root_from_heading(main, "NABÍDKA PRÁCE")
+		if offer_root != null:
+			var offer_labels := _labels_in(offer_root)
+			_set_first_job_name(offer_labels, str(offer["name"]))
+			_set_first_job_desc(offer_labels, str(offer["desc"]))
+			_set_first_prefix(offer_labels, "Požadovaný level:", "Požadovaný level: %d" % int(offer["level"]))
+			_set_first_prefix(offer_labels, "Mzda:", "Mzda: %d–%d Kč" % [int(offer["pay_min"]), int(offer["pay_max"])])
+			_set_first_prefix(offer_labels, "XP:", "XP: %d–%d XP" % [int(offer["xp_min"]), int(offer["xp_max"])])
 		_update_offer_timer_label(main)
-		if watched_accept != null:
+		if watched_accept != null and is_instance_valid(watched_accept):
 			watched_accept.disabled = level < int(offer["level"])
 			watched_accept.text = "PŘIJMOUT PRÁCI" if not watched_accept.disabled else "LVL %d POTŘEBA" % int(offer["level"])
 
+func _panel_root_from_heading(root: Node, heading: String) -> Node:
+	for node in _all_nodes(root):
+		if node is Label and (node as Label).text == heading:
+			return node.get_parent()
+	return null
+
+func _labels_in(root: Node) -> Array[Label]:
+	var result: Array[Label] = []
+	for node in _all_nodes(root):
+		if node is Label:
+			result.append(node as Label)
+	return result
+
+func _set_first_job_name(labels: Array[Label], value: String) -> void:
+	for label in labels:
+		if label.text in ["Pomocník ve dřevárně", "Skladník dřeva", "Obsluha pily", "Dřevorubec", "Řidič"]:
+			label.text = value
+			return
+
+func _set_first_job_desc(labels: Array[Label], value: String) -> void:
+	for label in labels:
+		if _is_job_desc(label.text):
+			label.text = value
+			return
+
+func _set_first_prefix(labels: Array[Label], prefix: String, value: String) -> void:
+	for label in labels:
+		if label.text.begins_with(prefix):
+			label.text = value
+			return
+
 func _update_offer_timer_label(main: Node) -> void:
 	if offer_timer_label == null or not is_instance_valid(offer_timer_label):
-		for node in _all_nodes(main):
-			if node is Label and (node as Label).text == "NABÍDKA PRÁCE":
-				var parent := node.get_parent()
-				if parent != null:
-					offer_timer_label = Label.new()
-					offer_timer_label.add_theme_font_size_override("font_size", 14)
-					offer_timer_label.add_theme_color_override("font_color", Color("#d6c4aa"))
-					parent.add_child(offer_timer_label)
-				break
+		var offer_root := _panel_root_from_heading(main, "NABÍDKA PRÁCE")
+		if offer_root != null:
+			offer_timer_label = Label.new()
+			offer_timer_label.add_theme_font_size_override("font_size", 14)
+			offer_timer_label.add_theme_color_override("font_color", Color("#d6c4aa"))
+			offer_root.add_child(offer_timer_label)
 	if offer_timer_label != null and is_instance_valid(offer_timer_label):
 		offer_timer_label.text = "Nová nabídka za %d s" % maxi(0, int(ceil(offer_time_left)))
 
