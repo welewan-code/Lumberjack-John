@@ -1,21 +1,53 @@
 extends Control
 
 const SHOP_CATEGORY_LABELS: Array[String] = ["SEKERY", "PILY", "DOPRAVNÍ PROSTŘEDKY"]
+const COMPANY_BG_CANDIDATES: Array[String] = [
+	"res://assets/backgrounds/company_yard.png",
+	"res://assets/backgrounds/sluncem_zalitý_dvůr_venkovské_chalupy.png",
+	"res://assets/sluncem_zalitý_dvůr_venkovské_chalupy.png"
+]
 
 var game: Node
+var company_background: TextureRect
 
 func _ready() -> void:
 	game = get_parent()
-	visible = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_build_company_background()
 	set_process(true)
+
+func _build_company_background() -> void:
+	company_background = TextureRect.new()
+	company_background.name = "CompanyYardBackground"
+	company_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	company_background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	company_background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	company_background.set_anchors_preset(Control.PRESET_FULL_RECT)
+	company_background.offset_top = 84.0
+	company_background.offset_bottom = -58.0
+	company_background.z_index = 10
+	company_background.visible = false
+	add_child(company_background)
+
+	for path in COMPANY_BG_CANDIDATES:
+		if ResourceLoader.exists(path):
+			var resource := ResourceLoader.load(path)
+			if resource is Texture2D:
+				company_background.texture = resource as Texture2D
+				break
 
 func _process(_delta: float) -> void:
 	if game == null:
 		return
+
 	var tab: String = ""
 	if "current_tab" in game:
 		tab = str(game.current_tab)
+
+	if is_instance_valid(company_background):
+		company_background.visible = tab == "FIRMA" and company_background.texture != null
+
 	if tab != "OBCHOD":
 		return
 
