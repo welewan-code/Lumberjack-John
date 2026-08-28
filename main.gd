@@ -40,7 +40,6 @@ var save_elapsed: float = 0.0
 
 func _ready() -> void:
 	load_game()
-	state["money"] = 0.0
 	# Jednorazove dej hraci 0.1 m3 spalku, aby slo stipani hned testovat.
 	if not bool(state.get("chop_seeded", false)) and float(state.get("logs_m3", 0.0)) < AXE_IN:
 		state["logs_m3"] = 0.10
@@ -49,6 +48,11 @@ func _ready() -> void:
 	build_ui()
 	show_tab("PRÁCE")
 	update_hud()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		save_game()
+		get_tree().quit()
 
 func panel_style(color_hex: String, border_hex: String = "#6b4628", radius: int = 6, width: int = 1) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
