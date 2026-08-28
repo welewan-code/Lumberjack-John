@@ -2,27 +2,11 @@ extends Control
 
 const SAVE_PATH: String = "user://drevo_tycoon_save.json"
 const STORAGE_CAPACITY: float = 10.0
-const LOGS_PRICE: float = 1100.0
-const ROUNDWOOD_PRICE: float = 1200.0
-const SPLIT_SALE_PRICE: float = 1100.0
 const AXE_IN: float = 0.010
 const AXE_OUT: float = 0.015
-const SAW_IN: float = 0.025
-const SAW_OUT: float = SAW_IN * 4.0 / 3.0
-const SPLITTER_WAGE: float = 2.0
-const SAWYER_WAGE: float = 3.0
+const WOODEN_AXE_TIME: float = 1.8
+const SHARPENED_AXE_TIME: float = 1.6
 const FRAME_SAW_CYCLE: float = 20.0
-const AKU_SAW_CYCLE: float = 14.0
-
-const LEVEL_XP: Array[int] = [0,100,250,450,700,1000,1400,1900,2500,3200,4000]
-const JOBS: Dictionary = {
-    "helper": {"name":"Pomocník ve dřevárně","pay":[1,3],"xp":[1,5]},
-    "splitter": {"name":"Štípač dřeva","pay":[3,6],"xp":[2,6]},
-    "warehouse": {"name":"Skladník dřeva","pay":[4,7],"xp":[3,7]},
-    "sawmill": {"name":"Obsluha pily","pay":[6,9],"xp":[4,8]},
-    "logger": {"name":"Dřevorubec","pay":[8,12],"xp":[5,9]},
-    "driver": {"name":"Řidič","pay":[10,14],"xp":[6,10]}
-}
 
 var state: Dictionary = {
     "money": 0.0,
@@ -46,520 +30,401 @@ var state: Dictionary = {
     "overtime_clicks": 0
 }
 
-var content: VBoxContainer
-var hud_money: Label
-var hud_wood: Label
-var hud_level: Label
-var message_label: Label
 var current_tab: String = "FIRMA"
-var manual_ready_at: int = 0
-var splitter_accum: float = 0.0
-var sawyer_accum: float = 0.0
-var save_accum: float = 0.0
-var picker_worker: String = ""
-var picker_map: Dictionary = {}
-var tool_picker: PopupMenu
-var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+var page_host: MarginContainer
+var hud_money: Label
+var hud_storage: Label
+var status_label: Label
+var timer_label: Label
+var action_progress: ProgressBar
+var split_button: Button
+var player_texture: TextureRect
+
+var action_running: bool = false
+var action_elapsed: float = 0.0
+var action_duration: float = WOODEN_AXE_TIME
+var save_elapsed: float = 0.0
 
 func _ready() -> void:
-    rng.randomize()
     load_game()
-    build_ui()
+    _build_shell()
     show_tab("FIRMA")
     update_hud()
 
-func build_ui() -> void:
-    var bg: ColorRect = ColorRect.new()
-    bg.color = Color("2b241d")
-    bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    add_child(bg)
+func _build_shell() -> void:
+    var background: ColorRect = ColorRect.new()
+    background.color = Color("#1d1712")
+    background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    add_child(background)
 
     var root: VBoxContainer = VBoxContainer.new()
     root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    root.add_theme_constant_override("separation", 8)
+    root.add_theme_constant_override("separation", 0)
     add_child(root)
 
-    var top: HBoxContainer = HBoxContainer.new()
-    top.custom_minimum_size.y = 54
-    top.add_theme_constant_override("separation", 20)
-    root.add_child(top)
+    var top_bar: PanelContainer = PanelContainer.new()
+    top_bar.custom_minimum_size.y = 66
+    root.add_child(top_bar)
+
+    var top_margin: MarginContainer = MarginContainer.new()
+    top_margin.add_theme_constant_override("margin_left", 22)
+    top_margin.add_theme_constant_override("margin_right", 22)
+    top_margin.add_theme_constant_override("margin_top", 10)
+    top_margin.add_theme_constant_override("margin_bottom", 10)
+    top_bar.add_child(top_margin)
+
+    var top_row: HBoxContainer = HBoxContainer.new()
+    top_row.add_theme_constant_override("separation", 28)
+    top_margin.add_child(top_row)
 
     var title: Label = Label.new()
-    title.text = "  LUMBERJACK JOHN / DŘEVO TYCOON"
-    title.add_theme_font_size_override("font_size", 22)
+    title.text = "LUMBERJACK JOHN"
+    title.add_theme_font_size_override("font_size", 24)
     title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    top.add_child(title)
+    top_row.add_child(title)
 
-    hud_level = Label.new()
-    top.add_child(hud_level)
     hud_money = Label.new()
-    top.add_child(hud_money)
-    hud_wood = Label.new()
-    top.add_child(hud_wood)
+    hud_money.add_theme_font_size_override("font_size", 18)
+    top_row.add_child(hud_money)
 
-    message_label = Label.new()
-    message_label.text = "Godot verze je připravená."
-    message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    root.add_child(message_label)
+    hud_storage = Label.new()
+    hud_storage.add_theme_font_size_override("font_size", 18)
+    top_row.add_child(hud_storage)
 
-    var panel: PanelContainer = PanelContainer.new()
-    panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    root.add_child(panel)
+    var body: HBoxContainer = HBoxContainer.new()
+    body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    body.add_theme_constant_override("separation", 0)
+    root.add_child(body)
 
-    var margin: MarginContainer = MarginContainer.new()
-    margin.add_theme_constant_override("margin_left", 18)
-    margin.add_theme_constant_override("margin_right", 18)
-    margin.add_theme_constant_override("margin_top", 12)
-    margin.add_theme_constant_override("margin_bottom", 12)
-    panel.add_child(margin)
+    var menu_panel: PanelContainer = PanelContainer.new()
+    menu_panel.custom_minimum_size.x = 210
+    body.add_child(menu_panel)
 
-    content = VBoxContainer.new()
-    content.add_theme_constant_override("separation", 10)
-    margin.add_child(content)
+    var menu_margin: MarginContainer = MarginContainer.new()
+    menu_margin.add_theme_constant_override("margin_left", 14)
+    menu_margin.add_theme_constant_override("margin_right", 14)
+    menu_margin.add_theme_constant_override("margin_top", 18)
+    menu_margin.add_theme_constant_override("margin_bottom", 18)
+    menu_panel.add_child(menu_margin)
 
-    var nav: HBoxContainer = HBoxContainer.new()
-    nav.alignment = BoxContainer.ALIGNMENT_CENTER
-    nav.custom_minimum_size.y = 64
-    root.add_child(nav)
-    for tab_value: String in ["FIRMA","PRÁCE","OBCHOD","SKLAD"]:
-        var button: Button = Button.new()
-        button.text = tab_value
-        button.custom_minimum_size = Vector2(170,48)
-        button.pressed.connect(show_tab.bind(tab_value))
-        nav.add_child(button)
+    var menu: VBoxContainer = VBoxContainer.new()
+    menu.add_theme_constant_override("separation", 10)
+    menu_margin.add_child(menu)
 
-    tool_picker = PopupMenu.new()
-    tool_picker.id_pressed.connect(on_tool_picked)
-    add_child(tool_picker)
+    _menu_button(menu, "FIRMA", "FIRMA")
+    _menu_button(menu, "PRÁCE", "PRÁCE")
+    _menu_button(menu, "OBCHOD", "OBCHOD")
+    _menu_button(menu, "SKLAD", "SKLAD")
 
-func clear_content() -> void:
-    for child: Node in content.get_children():
+    var spacer: Control = Control.new()
+    spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    menu.add_child(spacer)
+
+    var version_note: Label = Label.new()
+    version_note.text = "základ rozhraní"
+    version_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    version_note.modulate = Color(1, 1, 1, 0.55)
+    menu.add_child(version_note)
+
+    page_host = MarginContainer.new()
+    page_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    page_host.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    page_host.add_theme_constant_override("margin_left", 18)
+    page_host.add_theme_constant_override("margin_right", 18)
+    page_host.add_theme_constant_override("margin_top", 18)
+    page_host.add_theme_constant_override("margin_bottom", 18)
+    body.add_child(page_host)
+
+    var bottom: PanelContainer = PanelContainer.new()
+    bottom.custom_minimum_size.y = 42
+    root.add_child(bottom)
+
+    status_label = Label.new()
+    status_label.text = "Připraveno."
+    status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    status_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    bottom.add_child(status_label)
+
+func _menu_button(parent: VBoxContainer, text: String, tab: String) -> void:
+    var button: Button = Button.new()
+    button.text = text
+    button.custom_minimum_size = Vector2(180, 52)
+    button.add_theme_font_size_override("font_size", 18)
+    button.pressed.connect(show_tab.bind(tab))
+    parent.add_child(button)
+
+func _clear_page() -> void:
+    for child: Node in page_host.get_children():
         child.queue_free()
 
 func show_tab(tab: String) -> void:
     current_tab = tab
-    clear_content()
+    _clear_page()
     match tab:
-        "FIRMA": render_firma()
-        "PRÁCE": render_prace()
-        "OBCHOD": render_obchod()
-        "SKLAD": render_sklad()
+        "FIRMA": _render_firma()
+        "PRÁCE": _render_placeholder("PRÁCE", "Tady později přesuneme pracovní směny a zaměstnání.")
+        "OBCHOD": _render_placeholder("OBCHOD", "Tady později přesuneme nákup nářadí a materiálu.")
+        "SKLAD": _render_placeholder("SKLAD", "Tady později přesuneme sklad a přehled vybavení.")
     update_hud()
 
-func add_header(text: String) -> void:
-    var label: Label = Label.new()
-    label.text = text
-    label.add_theme_font_size_override("font_size", 28)
-    content.add_child(label)
+func _render_firma() -> void:
+    var page: VBoxContainer = VBoxContainer.new()
+    page.add_theme_constant_override("separation", 12)
+    page_host.add_child(page)
 
-func add_info(text: String, parent: Node = null) -> Label:
-    var label: Label = Label.new()
-    label.text = text
-    if parent == null:
-        content.add_child(label)
-    else:
-        parent.add_child(label)
-    return label
+    var heading: Label = Label.new()
+    heading.text = "FIRMA — DOMÁCÍ ZAHRADA"
+    heading.add_theme_font_size_override("font_size", 27)
+    page.add_child(heading)
 
-func make_button(text: String, callback: Callable, parent: Node = null) -> Button:
-    var button: Button = Button.new()
-    button.text = text
-    button.custom_minimum_size = Vector2(0,44)
-    button.pressed.connect(callback)
-    if parent == null:
-        content.add_child(button)
-    else:
-        parent.add_child(button)
-    return button
+    var sub: Label = Label.new()
+    sub.text = "Špalky %.3f m³   •   Naštípané %.3f m³" % [float(state["logs_m3"]), float(state["split_m3"])]
+    sub.modulate = Color(1, 1, 1, 0.72)
+    page.add_child(sub)
 
-func render_firma() -> void:
-    add_header("FIRMA — zahrada")
-    add_info("Špalky: %.3f m³   |   Kulatina: %.3f m³   |   Naštípané: %.3f m³" % [float(state["logs_m3"]), float(state["roundwood_m3"]), float(state["split_m3"])])
-    add_info("Sklad: %.3f / %.1f m³" % [total_stored(), STORAGE_CAPACITY])
+    var yard_panel: PanelContainer = PanelContainer.new()
+    yard_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    page.add_child(yard_panel)
 
-    var yard: HBoxContainer = HBoxContainer.new()
-    yard.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    yard.add_theme_constant_override("separation", 16)
-    content.add_child(yard)
+    var yard: Control = Control.new()
+    yard.custom_minimum_size = Vector2(0, 430)
+    yard_panel.add_child(yard)
 
-    var production: VBoxContainer = VBoxContainer.new()
-    production.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    yard.add_child(production)
-    add_info("VLASTNÍ PRÁCE", production).add_theme_font_size_override("font_size",20)
-    make_button("🪓 ŠTÍPNOUT ŠPALEK", manual_split, production)
-    make_button("PRODAT 0,1 m³ ŠTÍPANÉHO = 110 Kč", sell_split, production)
-    add_info("Každý tvůj sek: -0,010 m³ špalků → +0,015 m³ štípaného.", production)
+    var yard_bg: ColorRect = ColorRect.new()
+    yard_bg.color = Color("#5b7140")
+    yard_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    yard.add_child(yard_bg)
 
-    var workers: VBoxContainer = VBoxContainer.new()
-    workers.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    yard.add_child(workers)
-    add_info("VÝPOMOC OD KAMARÁDŮ", workers).add_theme_font_size_override("font_size",20)
+    var ground: ColorRect = ColorRect.new()
+    ground.color = Color("#796346")
+    ground.anchor_left = 0.0
+    ground.anchor_top = 0.68
+    ground.anchor_right = 1.0
+    ground.anchor_bottom = 1.0
+    yard.add_child(ground)
 
-    var saw_text: String = "+  PILAŘ — vyber pilu"
-    if str(state["sawyer_tool"]) != "":
-        saw_text = "👷🪚 PILAŘ — %s" % tool_name(str(state["sawyer_tool"]))
-    make_button(saw_text, open_tool_picker.bind("sawyer"), workers)
-    add_info("Rámovka: 20 s / cyklus. Aku pila z eshopu: 14 s / cyklus. Mzda pilaře 3 Kč / cyklus.", workers)
+    var shed: PanelContainer = PanelContainer.new()
+    shed.position = Vector2(38, 34)
+    shed.size = Vector2(210, 120)
+    yard.add_child(shed)
+    var shed_label: Label = Label.new()
+    shed_label.text = "DOMÁCÍ DŘEVÁRNA\n\npozději sem dáme\nbaráček / přístřešek"
+    shed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    shed_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    shed.add_child(shed_label)
 
-    var split_text: String = "+  ŠTÍPAČ — vyber sekeru"
-    if str(state["splitter_tool"]) != "":
-        split_text = "👷🪓 ŠTÍPAČ — %s" % tool_name(str(state["splitter_tool"]))
-    make_button(split_text, open_tool_picker.bind("splitter"), workers)
-    add_info("Štípač: -2 Kč za sek. Rychlost podle přidělené sekery.", workers)
+    var stack_label: Label = Label.new()
+    stack_label.text = "🪵  🪵  🪵\nzásoba špalků"
+    stack_label.position = Vector2(52, 295)
+    stack_label.add_theme_font_size_override("font_size", 22)
+    yard.add_child(stack_label)
 
-func render_prace() -> void:
-    add_header("PRÁCE")
-    if not bool(state["employed"]):
-        add_info("Momentálně jsi bez práce.")
-        make_button("VRÁTIT SE JAKO POMOCNÍK", return_to_work)
-        return
-    var job: Dictionary = JOBS.get(str(state["current_job"]), JOBS["helper"])
-    add_info("Pozice: %s" % str(job["name"]))
-    add_info("Výdělek: %d–%d Kč / akce   |   XP: %d–%d" % [int(job["pay"][0]), int(job["pay"][1]), int(job["xp"][0]), int(job["xp"][1])])
-    add_info("Směna: %d / 8   |   volné akce po směně: %d / 2" % [int(state["work_clicks"]), int(state["home_clicks"]) + int(state["overtime_clicks"])])
-    make_button("PRACOVAT", work_action)
-    if int(state["work_clicks"]) >= 8:
-        make_button("PŘESČAS +20 %", overtime_action)
-    make_button("ODEJÍT Z PRÁCE", quit_job)
+    var work_zone: VBoxContainer = VBoxContainer.new()
+    work_zone.position = Vector2(470, 60)
+    work_zone.size = Vector2(350, 330)
+    work_zone.alignment = BoxContainer.ALIGNMENT_CENTER
+    yard.add_child(work_zone)
 
-func render_obchod() -> void:
-    add_header("OBCHOD")
-    add_info("VYBAVENÍ")
-    make_button("Tupá dřevěná sekera — 100 Kč   (máš %d)" % int(state["wooden_axe_qty"]), buy_tool.bind("wooden"))
-    make_button("Nabroušená sekera — 150 Kč   (máš %d)" % int(state["sharpened_axe_qty"]), buy_tool.bind("sharpened"))
-    make_button("Rezavá rámovka — 80 Kč   (máš %d)" % int(state["frame_saw_qty"]), buy_tool.bind("frameSaw"))
-    make_button("Aku pila z eshopu — 800 Kč   (máš %d)" % int(state["aku_saw_qty"]), buy_tool.bind("akuSaw"))
-    make_button("Děravé kolečko — 120 Kč   (máš %d)" % int(state["wheelbarrow_qty"]), buy_tool.bind("wheelbarrow"))
-    add_info("")
-    add_info("DŘEVO")
-    make_button("Koupit 1 m³ špalků — 1 100 Kč", buy_material.bind("logs"))
-    make_button("Koupit 1 m³ měkké kulatiny — 1 200 Kč", buy_material.bind("roundwood"))
+    var role: Label = Label.new()
+    role.text = "TY — RUČNÍ ŠTÍPÁNÍ"
+    role.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    role.add_theme_font_size_override("font_size", 19)
+    work_zone.add_child(role)
 
-func render_sklad() -> void:
-    add_header("SKLAD")
-    add_info("Kapacita: %.3f / %.1f m³" % [total_stored(), STORAGE_CAPACITY])
-    add_info("Špalky: %.3f m³" % float(state["logs_m3"]))
-    add_info("Kulatina: %.3f m³" % float(state["roundwood_m3"]))
-    add_info("Naštípané dřevo: %.3f m³" % float(state["split_m3"]))
-    add_info("")
-    add_info("NÁŘADÍ")
-    add_info("Tupá sekera: %d   |   Nabroušená: %d   |   Rámovka: %d   |   Aku pila: %d   |   Kolečko: %d" % [int(state["wooden_axe_qty"]), int(state["sharpened_axe_qty"]), int(state["frame_saw_qty"]), int(state["aku_saw_qty"]), int(state["wheelbarrow_qty"])])
-    add_info("Štípač má: %s" % (tool_name(str(state["splitter_tool"])) if str(state["splitter_tool"]) != "" else "nic"))
-    add_info("Pilař má: %s" % (tool_name(str(state["sawyer_tool"])) if str(state["sawyer_tool"]) != "" else "nic"))
+    player_texture = TextureRect.new()
+    player_texture.custom_minimum_size = Vector2(230, 210)
+    player_texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    player_texture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    player_texture.texture = _load_texture_for_axe()
+    work_zone.add_child(player_texture)
 
-func total_stored() -> float:
-    return float(state["logs_m3"]) + float(state["roundwood_m3"]) + float(state["split_m3"])
+    if player_texture.texture == null:
+        var fallback: Label = Label.new()
+        fallback.text = "🧔\n🪓   🪵"
+        fallback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        fallback.add_theme_font_size_override("font_size", 42)
+        work_zone.add_child(fallback)
 
-func free_storage() -> float:
-    return STORAGE_CAPACITY - total_stored()
+    var stump: Label = Label.new()
+    stump.text = "🪵  špalek"
+    stump.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    stump.add_theme_font_size_override("font_size", 24)
+    work_zone.add_child(stump)
 
-func tool_name(tool: String) -> String:
-    match tool:
-        "wooden": return "Tupá dřevěná sekera"
-        "sharpened": return "Nabroušená sekera"
-        "frameSaw": return "Rezavá rámovka"
-        "akuSaw": return "Aku pila z eshopu"
-    return ""
+    var action_panel: PanelContainer = PanelContainer.new()
+    page.add_child(action_panel)
 
-func tool_qty(tool: String) -> int:
-    match tool:
-        "wooden": return int(state["wooden_axe_qty"])
-        "sharpened": return int(state["sharpened_axe_qty"])
-        "frameSaw": return int(state["frame_saw_qty"])
-        "akuSaw": return int(state["aku_saw_qty"])
-    return 0
+    var action_margin: MarginContainer = MarginContainer.new()
+    action_margin.add_theme_constant_override("margin_left", 14)
+    action_margin.add_theme_constant_override("margin_right", 14)
+    action_margin.add_theme_constant_override("margin_top", 12)
+    action_margin.add_theme_constant_override("margin_bottom", 12)
+    action_panel.add_child(action_margin)
 
-func assigned_count(tool: String) -> int:
-    var count: int = 0
-    if str(state["splitter_tool"]) == tool:
-        count += 1
-    if str(state["sawyer_tool"]) == tool:
-        count += 1
-    return count
+    var action_row: HBoxContainer = HBoxContainer.new()
+    action_row.add_theme_constant_override("separation", 14)
+    action_margin.add_child(action_row)
 
-func free_tool_count(tool: String) -> int:
-    return maxi(0, tool_qty(tool) - assigned_count(tool))
+    split_button = Button.new()
+    split_button.text = "ŠTÍPAT"
+    split_button.custom_minimum_size = Vector2(220, 58)
+    split_button.add_theme_font_size_override("font_size", 22)
+    split_button.pressed.connect(_start_manual_split)
+    action_row.add_child(split_button)
 
-func open_tool_picker(worker: String) -> void:
-    picker_worker = worker
-    picker_map.clear()
-    tool_picker.clear()
-    var item_id: int = 1
-    if worker == "splitter":
-        for tool: String in ["wooden","sharpened"]:
-            if free_tool_count(tool) > 0:
-                tool_picker.add_item(tool_name(tool), item_id)
-                picker_map[item_id] = tool
-                item_id += 1
-    else:
-        for tool: String in ["frameSaw", "akuSaw"]:
-            if free_tool_count(tool) > 0:
-                tool_picker.add_item(tool_name(tool), item_id)
-                picker_map[item_id] = tool
-                item_id += 1
+    var timing: VBoxContainer = VBoxContainer.new()
+    timing.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    action_row.add_child(timing)
 
-    var current: String = str(state["splitter_tool"]) if worker == "splitter" else str(state["sawyer_tool"])
-    if current != "":
-        tool_picker.add_separator()
-        tool_picker.add_item("ODEBRAT NÁSTROJ", 99)
-        picker_map[99] = "REMOVE"
-    if picker_map.is_empty():
-        tool_picker.add_item("Žádný volný vhodný nástroj", 50)
-        var disabled_index: int = tool_picker.get_item_index(50)
-        if disabled_index >= 0:
-            tool_picker.set_item_disabled(disabled_index, true)
-    tool_picker.popup_centered(Vector2i(430,0))
+    timer_label = Label.new()
+    timer_label.text = _timer_text()
+    timer_label.add_theme_font_size_override("font_size", 17)
+    timing.add_child(timer_label)
 
-func on_tool_picked(id: int) -> void:
-    if not picker_map.has(id):
-        return
-    var tool: String = str(picker_map[id])
-    if tool == "REMOVE":
-        if picker_worker == "splitter":
-            state["splitter_tool"] = ""
-        else:
-            state["sawyer_tool"] = ""
-        say("Nástroj vrácen do skladu.")
-    else:
-        if picker_worker == "splitter":
-            state["splitter_tool"] = tool
-        else:
-            state["sawyer_tool"] = tool
-        var worker_name: String = "Štípač" if picker_worker == "splitter" else "Pilař"
-        say("%s dostal %s." % [worker_name, tool_name(tool)])
-    save_game()
-    show_tab("FIRMA")
+    action_progress = ProgressBar.new()
+    action_progress.min_value = 0.0
+    action_progress.max_value = _axe_time()
+    action_progress.value = 0.0
+    action_progress.show_percentage = false
+    action_progress.custom_minimum_size.y = 20
+    timing.add_child(action_progress)
 
-func player_axe() -> String:
-    var preferred: String = str(state["equipped_axe"])
-    if preferred in ["wooden","sharpened"] and free_tool_count(preferred) > 0:
-        return preferred
-    if free_tool_count("sharpened") > 0:
-        return "sharpened"
-    if free_tool_count("wooden") > 0:
-        return "wooden"
-    return ""
+    var hint: Label = Label.new()
+    hint.text = "Klik → čas podle sekery → hotový sek. Později sem jen přesuneme další ovládací prvky."
+    hint.modulate = Color(1, 1, 1, 0.62)
+    timing.add_child(hint)
 
-func manual_split() -> void:
-    if bool(state["employed"]) and int(state["work_clicks"]) < 8:
-        say("Nejdřív dokonči 8 pracovních akcí. Pak máš 2 volné akce doma nebo přesčas.")
-        return
-    if bool(state["employed"]) and int(state["home_clicks"]) + int(state["overtime_clicks"]) >= 2:
-        reset_shift()
-        say("Volno skončilo. Zase musíš do práce.")
-        show_tab("FIRMA")
-        return
-    var axe: String = player_axe()
-    if axe == "":
-        say("Nemáš volnou sekeru. Pokud ji má brigádník, potřebuješ druhou.")
-        return
-    var now: int = Time.get_ticks_msec()
-    if now < manual_ready_at:
-        say("Sekera ještě není připravená.")
+func _render_placeholder(title_text: String, body_text: String) -> void:
+    var panel: PanelContainer = PanelContainer.new()
+    panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    page_host.add_child(panel)
+
+    var box: VBoxContainer = VBoxContainer.new()
+    box.alignment = BoxContainer.ALIGNMENT_CENTER
+    panel.add_child(box)
+
+    var title: Label = Label.new()
+    title.text = title_text
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title.add_theme_font_size_override("font_size", 30)
+    box.add_child(title)
+
+    var body: Label = Label.new()
+    body.text = body_text
+    body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    body.add_theme_font_size_override("font_size", 18)
+    box.add_child(body)
+
+func _load_texture_for_axe() -> Texture2D:
+    var path: String = "res://assets/characters/player_wood_1.png"
+    if str(state["equipped_axe"]) == "sharpened":
+        path = "res://assets/characters/player_sharp_1.png"
+    if ResourceLoader.exists(path):
+        var resource: Resource = ResourceLoader.load(path)
+        if resource is Texture2D:
+            return resource as Texture2D
+    return null
+
+func _axe_time() -> float:
+    if str(state["equipped_axe"]) == "sharpened":
+        return SHARPENED_AXE_TIME
+    return WOODEN_AXE_TIME
+
+func _timer_text() -> String:
+    var axe_name: String = "Tupá sekera"
+    if str(state["equipped_axe"]) == "sharpened":
+        axe_name = "Nabroušená sekera"
+    return "%s  •  %.1f s / sek" % [axe_name, _axe_time()]
+
+func _start_manual_split() -> void:
+    if action_running:
         return
     if float(state["logs_m3"]) + 0.000001 < AXE_IN:
-        say("Nemáš dost špalků.")
+        _say("Nemáš dost špalků. Pro rychlý test spusť TESTOVAT.bat.")
         return
-    if free_storage() + AXE_IN + 0.000001 < AXE_OUT:
-        say("Sklad je plný.")
+    if _free_storage() + AXE_IN + 0.000001 < AXE_OUT:
+        _say("Sklad je plný.")
         return
+    if _available_player_axe() == "":
+        _say("Nemáš volnou sekeru.")
+        return
+
+    action_running = true
+    action_elapsed = 0.0
+    action_duration = _axe_time()
+    if action_progress != null:
+        action_progress.max_value = action_duration
+        action_progress.value = 0.0
+    if split_button != null:
+        split_button.disabled = true
+        split_button.text = "ŠTÍPÁM…"
+    _say("Štípání začalo.")
+
+func _finish_manual_split() -> void:
+    action_running = false
     state["logs_m3"] = float(state["logs_m3"]) - AXE_IN
     state["split_m3"] = float(state["split_m3"]) + AXE_OUT
-    manual_ready_at = now + (1600 if axe == "sharpened" else 1800)
-    if bool(state["employed"]):
-        state["home_clicks"] = int(state["home_clicks"]) + 1
-        finish_bonus_if_needed()
-    say("Štípnuto: +0,015 m³.")
     save_game()
+    _say("Hotovo: +0,015 m³ štípaného.")
     show_tab("FIRMA")
 
-func sell_split() -> void:
-    if float(state["split_m3"]) + 0.000001 < 0.1:
-        say("Nemáš 0,1 m³ štípaného dřeva.")
-        return
-    state["split_m3"] = float(state["split_m3"]) - 0.1
-    state["money"] = float(state["money"]) + 110.0
-    say("Prodáno 0,1 m³ za 110 Kč.")
-    save_game()
-    show_tab("FIRMA")
+func _available_player_axe() -> String:
+    if str(state["equipped_axe"]) == "sharpened" and int(state["sharpened_axe_qty"]) > 0:
+        return "sharpened"
+    if int(state["wooden_axe_qty"]) > 0:
+        state["equipped_axe"] = "wooden"
+        return "wooden"
+    if int(state["sharpened_axe_qty"]) > 0:
+        state["equipped_axe"] = "sharpened"
+        return "sharpened"
+    return ""
 
-func buy_tool(tool: String) -> void:
-    var price: float = 0.0
-    match tool:
-        "wooden": price = 100.0
-        "sharpened": price = 150.0
-        "frameSaw": price = 80.0
-        "akuSaw": price = 800.0
-        "wheelbarrow": price = 120.0
-    if float(state["money"]) < price:
-        say("Nemáš dost peněz.")
-        return
-    if tool == "sharpened" and int(state["wooden_axe_qty"]) < 1:
-        say("Nejdřív kup tupou dřevěnou sekeru.")
-        return
-    state["money"] = float(state["money"]) - price
-    match tool:
-        "wooden": state["wooden_axe_qty"] = int(state["wooden_axe_qty"]) + 1
-        "sharpened": state["sharpened_axe_qty"] = int(state["sharpened_axe_qty"]) + 1
-        "frameSaw": state["frame_saw_qty"] = int(state["frame_saw_qty"]) + 1
-        "akuSaw": state["aku_saw_qty"] = int(state["aku_saw_qty"]) + 1
-        "wheelbarrow": state["wheelbarrow_qty"] = int(state["wheelbarrow_qty"]) + 1
-    say("Nářadí koupeno.")
-    save_game()
-    show_tab("OBCHOD")
+func _process(delta: float) -> void:
+    if action_running:
+        action_elapsed += delta
+        if action_progress != null:
+            action_progress.value = minf(action_elapsed, action_duration)
+        if timer_label != null:
+            var left: float = maxf(0.0, action_duration - action_elapsed)
+            timer_label.text = "Sekera pracuje… %.1f s" % left
+        if action_elapsed >= action_duration:
+            _finish_manual_split()
 
-func buy_material(kind: String) -> void:
-    if free_storage() < 0.999999:
-        say("Ve skladu není místo na 1 m³.")
-        return
-    var price: float = LOGS_PRICE if kind == "logs" else ROUNDWOOD_PRICE
-    if float(state["money"]) < price:
-        say("Nemáš dost peněz.")
-        return
-    state["money"] = float(state["money"]) - price
-    if kind == "logs":
-        state["logs_m3"] = float(state["logs_m3"]) + 1.0
-    else:
-        state["roundwood_m3"] = float(state["roundwood_m3"]) + 1.0
-    say("Materiál koupen.")
-    save_game()
-    show_tab("OBCHOD")
+    save_elapsed += delta
+    if save_elapsed >= 5.0:
+        save_elapsed = 0.0
+        save_game()
+    update_hud()
 
-func work_action() -> void:
-    if not bool(state["employed"]):
-        return
-    if int(state["work_clicks"]) >= 8:
-        say("Směna hotová. Máš 2 volné akce: doma nebo přesčas.")
-        return
-    var job: Dictionary = JOBS.get(str(state["current_job"]), JOBS["helper"])
-    var pay: int = rng.randi_range(int(job["pay"][0]), int(job["pay"][1]))
-    var xp_gain: int = rng.randi_range(int(job["xp"][0]), int(job["xp"][1]))
-    state["money"] = float(state["money"]) + pay
-    state["xp"] = int(state["xp"]) + xp_gain
-    state["work_clicks"] = int(state["work_clicks"]) + 1
-    sync_level()
-    say("Práce: +%d Kč, +%d XP." % [pay,xp_gain])
-    save_game()
-    show_tab("PRÁCE")
+func update_hud() -> void:
+    if hud_money != null:
+        hud_money.text = "PENÍZE  %.0f Kč" % float(state["money"])
+    if hud_storage != null:
+        hud_storage.text = "SKLAD  %.3f / %.1f m³" % [_total_stored(), STORAGE_CAPACITY]
 
-func overtime_action() -> void:
-    if not bool(state["employed"]) or int(state["work_clicks"]) < 8:
-        return
-    if int(state["home_clicks"]) + int(state["overtime_clicks"]) >= 2:
-        reset_shift()
-        show_tab("PRÁCE")
-        return
-    var job: Dictionary = JOBS.get(str(state["current_job"]), JOBS["helper"])
-    var base_pay: int = rng.randi_range(int(job["pay"][0]), int(job["pay"][1]))
-    var pay: int = int(round(base_pay * 1.2))
-    state["money"] = float(state["money"]) + pay
-    state["overtime_clicks"] = int(state["overtime_clicks"]) + 1
-    say("Přesčas: +%d Kč." % pay)
-    finish_bonus_if_needed()
-    save_game()
-    show_tab("PRÁCE")
+func _say(text: String) -> void:
+    if status_label != null:
+        status_label.text = text
 
-func finish_bonus_if_needed() -> void:
-    if int(state["home_clicks"]) + int(state["overtime_clicks"]) >= 2:
-        reset_shift()
+func _total_stored() -> float:
+    return float(state["logs_m3"]) + float(state["roundwood_m3"]) + float(state["split_m3"])
 
-func reset_shift() -> void:
-    state["work_clicks"] = 0
-    state["home_clicks"] = 0
-    state["overtime_clicks"] = 0
+func _free_storage() -> float:
+    return STORAGE_CAPACITY - _total_stored()
 
-func quit_job() -> void:
-    state["employed"] = false
-    reset_shift()
-    say("Odešel jsi z práce.")
-    save_game()
-    show_tab("PRÁCE")
-
-func return_to_work() -> void:
-    state["employed"] = true
-    state["current_job"] = "helper"
-    say("Vrátil ses jako pomocník.")
-    save_game()
-    show_tab("PRÁCE")
-
-func sync_level() -> void:
-    var level_value: int = 0
-    for i: int in range(1, LEVEL_XP.size()):
-        if int(state["xp"]) >= LEVEL_XP[i]:
-            level_value = i
-    state["level"] = mini(10, level_value)
-
+# Tyhle dvě funkce necháváme kvůli offline_manager.gd, aby projekt zůstal kompatibilní.
 func do_splitter_cycle() -> bool:
-    if float(state["money"]) < SPLITTER_WAGE:
-        return false
     if float(state["logs_m3"]) + 0.000001 < AXE_IN:
         return false
-    if free_storage() + AXE_IN + 0.000001 < AXE_OUT:
+    if _free_storage() + AXE_IN + 0.000001 < AXE_OUT:
         return false
-    state["money"] = float(state["money"]) - SPLITTER_WAGE
     state["logs_m3"] = float(state["logs_m3"]) - AXE_IN
     state["split_m3"] = float(state["split_m3"]) + AXE_OUT
     return true
 
 func do_sawyer_cycle() -> bool:
-    if float(state["money"]) < SAWYER_WAGE:
-        return false
-    if float(state["roundwood_m3"]) + 0.000001 < SAW_IN:
-        return false
-    if free_storage() + SAW_IN + 0.000001 < SAW_OUT:
-        return false
-    state["money"] = float(state["money"]) - SAWYER_WAGE
-    state["roundwood_m3"] = float(state["roundwood_m3"]) - SAW_IN
-    state["logs_m3"] = float(state["logs_m3"]) + SAW_OUT
-    return true
-
-func _process(delta: float) -> void:
-    var splitter_tool: String = str(state["splitter_tool"])
-    if splitter_tool != "":
-        splitter_accum += delta
-        var splitter_cycle: float = 1.6 if splitter_tool == "sharpened" else 1.8
-        while splitter_accum >= splitter_cycle:
-            splitter_accum -= splitter_cycle
-            if not do_splitter_cycle():
-                splitter_accum = 0.0
-                break
-    else:
-        splitter_accum = 0.0
-
-    var sawyer_tool: String = str(state["sawyer_tool"])
-    var sawyer_cycle: float = 0.0
-    if sawyer_tool == "frameSaw":
-        sawyer_cycle = FRAME_SAW_CYCLE
-    elif sawyer_tool == "akuSaw":
-        sawyer_cycle = AKU_SAW_CYCLE
-
-    if sawyer_cycle > 0.0:
-        sawyer_accum += delta
-        while sawyer_accum >= sawyer_cycle:
-            sawyer_accum -= sawyer_cycle
-            if not do_sawyer_cycle():
-                sawyer_accum = 0.0
-                break
-    else:
-        sawyer_accum = 0.0
-
-    save_accum += delta
-    if save_accum >= 5.0:
-        save_accum = 0.0
-        save_game()
-    update_hud()
-
-func update_hud() -> void:
-    if hud_money == null:
-        return
-    hud_money.text = "PENÍZE: %.0f Kč" % float(state["money"])
-    hud_wood.text = "DŘEVO: %.3f m³" % float(state["split_m3"])
-    hud_level.text = "LVL %d  |  XP %d" % [int(state["level"]), int(state["xp"])]
-
-func say(text: String) -> void:
-    if message_label != null:
-        message_label.text = text
+    return false
 
 func save_game() -> void:
     var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -574,9 +439,6 @@ func load_game() -> void:
         return
     var parsed: Variant = JSON.parse_string(file.get_as_text())
     if parsed is Dictionary:
-        var parsed_dict: Dictionary = parsed
-        for key: Variant in parsed_dict.keys():
-            state[key] = parsed_dict[key]
-    if not state.has("aku_saw_qty"):
-        state["aku_saw_qty"] = 0
-    sync_level()
+        var loaded: Dictionary = parsed as Dictionary
+        for key: Variant in loaded.keys():
+            state[key] = loaded[key]
