@@ -49,9 +49,12 @@ func _on_work_pressed() -> void:
 	var main := get_tree().current_scene
 	if main == null:
 		return
+
 	reward_pending = true
 	var duration: float = float(main.call("axe_time"))
+	_play_chop_animation(main, duration)
 	await get_tree().create_timer(duration + 0.05).timeout
+
 	main = get_tree().current_scene
 	if main != null:
 		var state_value = main.get("state")
@@ -61,8 +64,10 @@ func _on_work_pressed() -> void:
 			if not JOBS.has(job_id):
 				job_id = "helper"
 			var job: Dictionary = JOBS[job_id]
-			state["money"] = float(state.get("money", 0.0)) + randi_range(int(job["pay_min"]), int(job["pay_max"]))
-			state["xp"] = int(state.get("xp", 0)) + randi_range(int(job["xp_min"]), int(job["xp_max"]))
+			var pay: int = randi_range(int(job["pay_min"]), int(job["pay_max"]))
+			var xp_gain: int = randi_range(int(job["xp_min"]), int(job["xp_max"]))
+			state["money"] = float(state.get("money", 0.0)) + pay
+			state["xp"] = int(state.get("xp", 0)) + xp_gain
 			state["work_clicks"] = int(state.get("work_clicks", 0)) + 1
 			state["level"] = level_from_xp(int(state["xp"]))
 			main.set("state", state)
@@ -70,7 +75,94 @@ func _on_work_pressed() -> void:
 			main.call("save_game")
 			_refresh_xp_bar(main)
 			_refresh_work_ui(main)
+			_spawn_reward_feedback(main, pay, xp_gain)
 	reward_pending = false
+
+func _play_chop_animation(main: Node, duration: float) -> void:
+	var player := _find_player_texture(main)
+	if player == null:
+		return
+
+	var prefix: String = "player_wood_"
+	var state_value = main.get("state")
+	if state_value is Dictionary and str((state_value as Dictionary).get("equipped_axe", "wooden")) == "sharpened":
+		prefix = "player_sharp_"
+
+	var frames: Array[Texture2D] = []
+	for i in range(1, 5):
+		var path: String = "res://assets/characters/%s%d.png" % [prefix, i]
+		if ResourceLoader.exists(path):
+			var resource := ResourceLoader.load(path)
+			if resource is Texture2D:
+				frames.append(resource as Texture2D)
+
+	if frames.size() < 2:
+		return
+
+	player.texture = frames[mini(1, frames.size() - 1)]
+	await get_tree().create_timer(duration * 0.32).timeout
+	if not is_instance_valid(player):
+		return
+	player.texture = frames[mini(2, frames.size() - 1)]
+	await get_tree().create_timer(duration * 0.28).timeout
+	if not is_instance_valid(player):
+		return
+	player.texture = frames[mini(3, frames.size() - 1)]
+	await get_tree().create_timer(duration * 0.40).timeout
+	if is_instance_valid(player):
+		player.texture = frames[0]
+
+func _find_player_texture(root: Node) -> TextureRect:
+	for node in _all_nodes(root):
+		if node is TextureRect:
+			var texture_rect := node as TextureRect
+			if texture_rect.texture != null:
+				var path: String = texture_rect.texture.resource_path
+				if path.contains("player_wood_") or path.contains("player_sharp_"):
+					return texture_rect
+	return null
+
+func _spawn_reward_feedback(main: Node, pay: int, xp_gain: int) -> void:
+	if not (main is Control):
+		return
+	var root := main as Control
+	var viewport_size: Vector2 = root.get_viewport().get_visible_rect().size
+	var base_pos := Vector2(viewport_size.x * 0.50, viewport_size.y * 0.37)
+
+	_spawn_float_label(root, "+%d Kč" % pay, base_pos + Vector2(-70, 0), Color("#ffd24a"))
+	_spawn_float_label(root, "+%d XP" % xp_gain, base_pos + Vector2(55, 0), Color("#9ddf52"))
+
+	_pulse_label(main.get("money_label"))
+	_pulse_label(main.get("xp_label"))
+
+func _spawn_float_label(parent: Control, text_value: String, start_pos: Vector2, color: Color) -> void:
+	var label := Label.new()
+	label.text = text_value
+	label.position = start_pos
+	label.z_index = 100
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_font_size_override("font_size", 28)
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.75))
+	label.add_theme_constant_override("shadow_offset_x", 2)
+	label.add_theme_constant_override("shadow_offset_y", 2)
+	parent.add_child(label)
+
+	var tween := parent.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(label, "position", start_pos + Vector2(0, -75), 0.90).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "modulate:a", 0.0, 0.90).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.set_parallel(false)
+	tween.tween_callback(label.queue_free)
+
+func _pulse_label(value) -> void:
+	if not (value is Control):
+		return
+	var control := value as Control
+	control.pivot_offset = control.size * 0.5
+	var tween := control.create_tween()
+	tween.tween_property(control, "scale", Vector2(1.10, 1.10), 0.10)
+	tween.tween_property(control, "scale", Vector2.ONE, 0.16)
 
 func level_from_xp(xp: int) -> int:
 	var result: int = 1
@@ -150,6 +242,20 @@ func _refresh_xp_bar(main: Node) -> void:
 			if child is ProgressBar:
 				xp_bar = child as ProgressBar
 				break
+
+	if xp_bar != null:
+		xp_bar.custom_minimum_size.y = 14
+		var bg := StyleBoxFlat.new()
+		bg.bg_color = Color("#0f0d0b")
+		bg.border_color = Color("#5b422c")
+		bg.set_border_width_all(1)
+		bg.set_corner_radius_all(6)
+		var fill := StyleBoxFlat.new()
+		fill.bg_color = Color("#86ad28")
+		fill.set_corner_radius_all(6)
+		xp_bar.add_theme_stylebox_override("background", bg)
+		xp_bar.add_theme_stylebox_override("fill", fill)
+
 	if level >= 10:
 		xp_label.text = "%d XP  •  LVL 10 MAX" % total_xp
 		if xp_bar != null:
@@ -157,6 +263,7 @@ func _refresh_xp_bar(main: Node) -> void:
 			xp_bar.max_value = 1.0
 			xp_bar.value = 1.0
 		return
+
 	var current_floor: int = LEVEL_TOTAL_XP[level]
 	var next_total: int = LEVEL_TOTAL_XP[level + 1]
 	var gained_this_level: int = total_xp - current_floor
