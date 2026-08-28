@@ -72,7 +72,7 @@ func _render_company(main: Node) -> void:
 	scene.add_child(bg)
 
 	var player: TextureRect = TextureRect.new()
-	player.position = Vector2(105, 245)
+	player.position = Vector2(330, 385)
 	player.size = Vector2(190, 230)
 	player.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	player.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -82,7 +82,7 @@ func _render_company(main: Node) -> void:
 	scene.add_child(player)
 
 	chop_button = Button.new()
-	chop_button.position = Vector2(285, 390)
+	chop_button.position = Vector2(505, 505)
 	chop_button.size = Vector2(145, 82)
 	chop_button.text = "ŠPALEK\nŠTÍPAT"
 	chop_button.add_theme_font_size_override("font_size", 18)
@@ -93,7 +93,7 @@ func _render_company(main: Node) -> void:
 	scene.add_child(chop_button)
 
 	var action: PanelContainer = PanelContainer.new()
-	action.position = Vector2(145, 485)
+	action.position = Vector2(250, 650)
 	action.size = Vector2(430, 70)
 	action.add_theme_stylebox_override("panel", _style(main, "#171411", "#5b422c", 6, 1))
 	action.z_index = 7
@@ -150,7 +150,6 @@ func _build_jobs(main: Node) -> PanelContainer:
 	var spacer: Control = Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(spacer)
-
 	var dealer: PanelContainer = PanelContainer.new()
 	dealer.add_theme_stylebox_override("panel", _style(main, "#171411", "#79512e", 7, 1))
 	box.add_child(dealer)
