@@ -8,6 +8,7 @@ run/main_scene="res://Main.tscn"
 
 [autoload]
 WorkRewards="*res://work_rewards.gd"
+ShopUI="*res://shop_ui.gd"
 
 [display]
 window/size/viewport_width=1600
