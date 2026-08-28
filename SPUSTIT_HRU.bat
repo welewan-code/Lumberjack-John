@@ -24,11 +24,14 @@ if not defined GIT_EXE (
   if not defined GIT_EXE if exist "%LOCALAPPDATA%\Programs\Git\cmd\git.exe" set "GIT_EXE=%LOCALAPPDATA%\Programs\Git\cmd\git.exe"
 )
 
-rem --- Stahni posledni moje zmeny z GitHubu ---
+rem --- Vzdy srovnej lokalni kod s GitHubem. Neodstranuje untracked assety. ---
 if defined GIT_EXE if exist ".git" (
   echo.
-  echo Stahuji posledni verzi hry...
-  "%GIT_EXE%" pull --ff-only
+  echo Srovnavam projekt s posledni verzi na GitHubu...
+  "%GIT_EXE%" fetch origin
+  if errorlevel 1 goto :git_failed
+  "%GIT_EXE%" reset --hard origin/main
+  if errorlevel 1 goto :git_failed
 )
 
 rem --- Najdi Godot ---
@@ -63,6 +66,13 @@ if not defined GODOT_EXE (
   for /f "delims=" %%G in ('dir /b /s "%LOCALAPPDATA%\Microsoft\WinGet\Packages\GodotEngine.GodotEngine*\Godot*.exe" 2^>nul ^| findstr /vi "_console"') do if not defined GODOT_EXE set "GODOT_EXE=%%G"
 )
 exit /b
+
+:git_failed
+echo.
+echo Aktualizace z GitHubu se nepovedla.
+echo Posli mi screenshot teto obrazovky.
+pause
+exit /b 1
 
 :no_winget
 echo.
