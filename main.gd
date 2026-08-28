@@ -146,9 +146,21 @@ func clear_content() -> void:
 	for child:Node in content_host.get_children(): child.queue_free()
 
 func show_tab(tab:String) -> void:
-	current_tab=tab; clear_content()
-	if tab=="PRÁCE": render_work()
-	else: render_placeholder(tab)
+	current_tab=tab
+	clear_content()
+	if tab=="PRÁCE":
+		render_work()
+	elif tab=="OBCHOD":
+		call_deferred("_open_shop")
+	else:
+		render_placeholder(tab)
+
+func _open_shop() -> void:
+	var shop := get_node_or_null("/root/ShopUI")
+	if shop != null and shop.has_method("_render_shop"):
+		shop.call("_render_shop")
+	else:
+		render_placeholder("OBCHOD")
 
 func render_work() -> void:
 	var center:=PanelContainer.new(); center.size_flags_horizontal=Control.SIZE_EXPAND_FILL; center.size_flags_vertical=Control.SIZE_EXPAND_FILL; center.add_theme_stylebox_override("panel",panel_style("#6f5a3f","#8b5d32",0,1)); content_host.add_child(center)
@@ -192,7 +204,6 @@ func timer_text() -> String:
 func start_chop() -> void:
 	if action_running:
 		return
-	# V zaměstnání sekáš dřevo zaměstnavatele. Vlastní sklad se vůbec nemění.
 	action_running=true
 	action_elapsed=0.0
 	action_duration=axe_time()
@@ -202,8 +213,6 @@ func start_chop() -> void:
 	chop_button.text="SEKÁM..."
 
 func finish_chop() -> void:
-	# Dokončení pracovního seku dává pouze mzdu/XP přes WorkRewards.
-	# Žádné dřevo se hráči nepřidává ani neodebírá.
 	action_running=false
 	chop_button.disabled=false
 	chop_button.text="SEKNOUT"
