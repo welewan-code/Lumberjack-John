@@ -18,6 +18,9 @@ var reward_pending: bool = false
 var offer_job_id: String = ""
 var offer_time_left: float = OFFER_DURATION
 var offer_timer_label: Label = null
+var axe_overlay: TextureRect = null
+var axe_owner_player: TextureRect = null
+var axe_equipped_id: String = ""
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -36,6 +39,7 @@ func _process(delta: float) -> void:
 
 	_find_accept_button(main)
 	_ensure_offer(main)
+	_ensure_axe_overlay(main)
 	offer_time_left -= delta
 	if offer_time_left <= 0.0:
 		_roll_offer(main)
@@ -78,10 +82,64 @@ func _on_work_pressed() -> void:
 			_spawn_reward_feedback(main, pay, xp_gain)
 	reward_pending = false
 
+func _ensure_axe_overlay(main: Node) -> void:
+	var player := _find_player_texture(main)
+	if player == null:
+		if axe_overlay != null and is_instance_valid(axe_overlay):
+			axe_overlay.queue_free()
+		axe_overlay = null
+		axe_owner_player = null
+		return
+
+	var equipped: String = "wooden"
+	var state_value = main.get("state")
+	if state_value is Dictionary:
+		equipped = str((state_value as Dictionary).get("equipped_axe", "wooden"))
+
+	if axe_overlay == null or not is_instance_valid(axe_overlay) or axe_owner_player != player:
+		if axe_overlay != null and is_instance_valid(axe_overlay):
+			axe_overlay.queue_free()
+		axe_overlay = TextureRect.new()
+		axe_overlay.name = "EquippedAxe"
+		axe_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		axe_overlay.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		axe_overlay.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		axe_overlay.z_index = player.z_index + 5
+		axe_overlay.size = Vector2(92, 92)
+		axe_overlay.pivot_offset = Vector2(18, 70)
+		player.get_parent().add_child(axe_overlay)
+		axe_owner_player = player
+		axe_equipped_id = ""
+
+	if axe_equipped_id != equipped:
+		axe_equipped_id = equipped
+		var tool_path := "res://assets/tools/wooden_axe.png"
+		if equipped == "sharpened":
+			tool_path = "res://assets/tools/sharpened_axe.png"
+		if ResourceLoader.exists(tool_path):
+			var tool_resource := ResourceLoader.load(tool_path)
+			if tool_resource is Texture2D:
+				axe_overlay.texture = tool_resource as Texture2D
+		else:
+			axe_overlay.texture = null
+
+	if not reward_pending:
+		_update_axe_idle_pose()
+
+func _update_axe_idle_pose() -> void:
+	if axe_overlay == null or not is_instance_valid(axe_overlay):
+		return
+	if axe_owner_player == null or not is_instance_valid(axe_owner_player):
+		return
+	axe_overlay.position = axe_owner_player.position + Vector2(125, 92)
+	axe_overlay.rotation = deg_to_rad(34.0)
+	axe_overlay.scale = Vector2.ONE
+
 func _play_chop_animation(main: Node, duration: float) -> void:
 	var player := _find_player_texture(main)
 	if player == null:
 		return
+	_ensure_axe_overlay(main)
 
 	var prefix: String = "player_wood_"
 	var state_value = main.get("state")
@@ -96,21 +154,37 @@ func _play_chop_animation(main: Node, duration: float) -> void:
 			if resource is Texture2D:
 				frames.append(resource as Texture2D)
 
-	if frames.size() < 2:
-		return
+	if frames.size() >= 2:
+		player.texture = frames[1]
 
-	player.texture = frames[mini(1, frames.size() - 1)]
+	if axe_overlay != null and is_instance_valid(axe_overlay):
+		var start_pos := player.position + Vector2(125, 92)
+		axe_overlay.position = start_pos
+		axe_overlay.rotation = deg_to_rad(34.0)
+		var axe_tween := axe_overlay.create_tween()
+		axe_tween.tween_property(axe_overlay, "rotation", deg_to_rad(-58.0), duration * 0.32).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		axe_tween.parallel().tween_property(axe_overlay, "position", start_pos + Vector2(-14, -18), duration * 0.32)
+		axe_tween.tween_property(axe_overlay, "rotation", deg_to_rad(92.0), duration * 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		axe_tween.parallel().tween_property(axe_overlay, "position", start_pos + Vector2(28, 44), duration * 0.28)
+		axe_tween.tween_property(axe_overlay, "rotation", deg_to_rad(34.0), duration * 0.40).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		axe_tween.parallel().tween_property(axe_overlay, "position", start_pos, duration * 0.40)
+
 	await get_tree().create_timer(duration * 0.32).timeout
 	if not is_instance_valid(player):
 		return
-	player.texture = frames[mini(2, frames.size() - 1)]
+	if frames.size() >= 3:
+		player.texture = frames[2]
+
 	await get_tree().create_timer(duration * 0.28).timeout
 	if not is_instance_valid(player):
 		return
-	player.texture = frames[mini(3, frames.size() - 1)]
+	if frames.size() >= 4:
+		player.texture = frames[3]
+
 	await get_tree().create_timer(duration * 0.40).timeout
-	if is_instance_valid(player):
+	if is_instance_valid(player) and not frames.is_empty():
 		player.texture = frames[0]
+	_update_axe_idle_pose()
 
 func _find_player_texture(root: Node) -> TextureRect:
 	for node in _all_nodes(root):
@@ -128,10 +202,8 @@ func _spawn_reward_feedback(main: Node, pay: int, xp_gain: int) -> void:
 	var root := main as Control
 	var viewport_size: Vector2 = root.get_viewport().get_visible_rect().size
 	var base_pos := Vector2(viewport_size.x * 0.50, viewport_size.y * 0.37)
-
 	_spawn_float_label(root, "+%d Kč" % pay, base_pos + Vector2(-70, 0), Color("#ffd24a"))
 	_spawn_float_label(root, "+%d XP" % xp_gain, base_pos + Vector2(55, 0), Color("#9ddf52"))
-
 	_pulse_label(main.get("money_label"))
 	_pulse_label(main.get("xp_label"))
 
@@ -147,7 +219,6 @@ func _spawn_float_label(parent: Control, text_value: String, start_pos: Vector2,
 	label.add_theme_constant_override("shadow_offset_x", 2)
 	label.add_theme_constant_override("shadow_offset_y", 2)
 	parent.add_child(label)
-
 	var tween := parent.create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(label, "position", start_pos + Vector2(0, -75), 0.90).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -242,7 +313,6 @@ func _refresh_xp_bar(main: Node) -> void:
 			if child is ProgressBar:
 				xp_bar = child as ProgressBar
 				break
-
 	if xp_bar != null:
 		xp_bar.custom_minimum_size.y = 14
 		var bg := StyleBoxFlat.new()
@@ -255,7 +325,6 @@ func _refresh_xp_bar(main: Node) -> void:
 		fill.set_corner_radius_all(6)
 		xp_bar.add_theme_stylebox_override("background", bg)
 		xp_bar.add_theme_stylebox_override("fill", fill)
-
 	if level >= 10:
 		xp_label.text = "%d XP  •  LVL 10 MAX" % total_xp
 		if xp_bar != null:
@@ -263,7 +332,6 @@ func _refresh_xp_bar(main: Node) -> void:
 			xp_bar.max_value = 1.0
 			xp_bar.value = 1.0
 		return
-
 	var current_floor: int = LEVEL_TOTAL_XP[level]
 	var next_total: int = LEVEL_TOTAL_XP[level + 1]
 	var gained_this_level: int = total_xp - current_floor
@@ -286,16 +354,13 @@ func _refresh_work_ui(main: Node) -> void:
 	var level: int = level_from_xp(int(state.get("xp", 0)))
 	state["level"] = level
 	main.set("state", state)
-
 	var role = main.get("role_label")
 	if role is Label:
 		(role as Label).text = "%s  •  LVL %d" % [str(job["name"]), level]
-
 	var labels: Array[Label] = []
 	for node in _all_nodes(main):
 		if node is Label:
 			labels.append(node as Label)
-
 	var current_name_done := false
 	var current_desc_done := false
 	var current_pay_done := false
@@ -317,7 +382,6 @@ func _refresh_work_ui(main: Node) -> void:
 		elif label.text.begins_with("Směna:") and not shift_done:
 			label.text = "Směna: %d/8" % int(state.get("work_clicks", 0))
 			shift_done = true
-
 	if offer_job_id != "" and JOBS.has(offer_job_id):
 		var offer: Dictionary = JOBS[offer_job_id]
 		var offer_name_done := false
