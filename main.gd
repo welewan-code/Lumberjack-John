@@ -11,7 +11,7 @@ var state: Dictionary = {
 	"money": 0.0,
 	"xp": 0,
 	"level": 0,
-	"logs_m3": 0.10,
+	"logs_m3": 0.0,
 	"roundwood_m3": 0.0,
 	"split_m3": 0.0,
 	"wooden_axe_qty": 1,
@@ -40,11 +40,6 @@ var save_elapsed: float = 0.0
 
 func _ready() -> void:
 	load_game()
-	# Jednorazove dej hraci 0.1 m3 spalku, aby slo stipani hned testovat.
-	if not bool(state.get("chop_seeded", false)) and float(state.get("logs_m3", 0.0)) < AXE_IN:
-		state["logs_m3"] = 0.10
-		state["chop_seeded"] = true
-	save_game()
 	build_ui()
 	show_tab("PRÁCE")
 	update_hud()
@@ -195,15 +190,27 @@ func timer_text() -> String:
 	return "%s  –  %.1f s / sek" % [name,axe_time()]
 
 func start_chop() -> void:
-	if action_running: return
-	if float(state.get("logs_m3",0.0))+0.000001<AXE_IN:
-		timer_label.text="Nemáš špalky – pro test přidávám 0.1 m³"
-		state["logs_m3"]=float(state.get("logs_m3",0.0))+0.10
-		save_game()
-	action_running=true; action_elapsed=0.0; action_duration=axe_time(); progress.max_value=action_duration; progress.value=0.0; chop_button.disabled=true; chop_button.text="SEKÁM..."
+	if action_running:
+		return
+	# V zaměstnání sekáš dřevo zaměstnavatele. Vlastní sklad se vůbec nemění.
+	action_running=true
+	action_elapsed=0.0
+	action_duration=axe_time()
+	progress.max_value=action_duration
+	progress.value=0.0
+	chop_button.disabled=true
+	chop_button.text="SEKÁM..."
 
 func finish_chop() -> void:
-	action_running=false; state["logs_m3"]=maxf(0.0,float(state["logs_m3"])-AXE_IN); state["split_m3"]=float(state["split_m3"])+AXE_OUT; chop_button.disabled=false; chop_button.text="SEKNOUT"; progress.value=0.0; timer_label.text=timer_text(); save_game(); update_hud()
+	# Dokončení pracovního seku dává pouze mzdu/XP přes WorkRewards.
+	# Žádné dřevo se hráči nepřidává ani neodebírá.
+	action_running=false
+	chop_button.disabled=false
+	chop_button.text="SEKNOUT"
+	progress.value=0.0
+	timer_label.text=timer_text()
+	save_game()
+	update_hud()
 
 func _process(delta:float) -> void:
 	if action_running:
