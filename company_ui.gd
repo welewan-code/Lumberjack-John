@@ -71,6 +71,18 @@ func _render_company(main: Node) -> void:
 	bg.texture = _load_company_background()
 	scene.add_child(bg)
 
+	# Budoucí kolega vlevo: řezání na koze.
+	var saw_slot: Button = _colleague_slot(main, "+\nKOLEGA\nŘEZÁNÍ NA KOZE")
+	saw_slot.position = Vector2(45, 235)
+	saw_slot.size = Vector2(185, 125)
+	scene.add_child(saw_slot)
+
+	# Budoucí kolega vpravo: druhý štípač.
+	var splitter_slot: Button = _colleague_slot(main, "+\nKOLEGA\nŠTÍPÁNÍ")
+	splitter_slot.position = Vector2(700, 350)
+	splitter_slot.size = Vector2(185, 125)
+	scene.add_child(splitter_slot)
+
 	var player: TextureRect = TextureRect.new()
 	player.position = Vector2(330, 385)
 	player.size = Vector2(190, 230)
@@ -119,6 +131,16 @@ func _render_company(main: Node) -> void:
 	row.add_child(_build_jobs(main))
 	_refresh_storage_label(main)
 	_refresh_smelinar(main)
+
+func _colleague_slot(main: Node, text_value: String) -> Button:
+	var button: Button = Button.new()
+	button.text = text_value
+	button.add_theme_font_size_override("font_size", 15)
+	button.add_theme_stylebox_override("normal", _style(main, "#171411cc", "#9b7447", 10, 2))
+	button.add_theme_stylebox_override("hover", _style(main, "#241c15e8", "#d09b57", 10, 2))
+	button.tooltip_text = "Slot pro budoucího zaměstnance"
+	button.z_index = 4
+	return button
 
 func _build_left(main: Node) -> PanelContainer:
 	var panel: PanelContainer = _side_panel(main, 250)
