@@ -1,10 +1,13 @@
-; Engine configuration file.
+; Engine configuration file
 ; Dřevo Tycoon / Lumberjack John
 config_version=5
 
 [application]
 config/name="Lumberjack John"
 run/main_scene="res://Main.tscn"
+
+[autoload]
+WorkRewards="*res://work_rewards.gd"
 
 [display]
 window/size/viewport_width=1600
