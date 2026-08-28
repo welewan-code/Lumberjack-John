@@ -68,8 +68,12 @@ func _on_work_pressed() -> void:
 	if reward_pending:
 		return
 	var main := get_tree().current_scene
-	if main == null or bool(main.get("action_running")):
+	if main == null:
 		return
+
+	# Pozn.: start_chop je připojené na stejné tlačítko a může se spustit
+	# dřív než tento callback. Proto tady NESMÍME odmítnout odměnu jen proto,
+	# že action_running už je true.
 	reward_pending = true
 	var duration: float = float(main.call("axe_time"))
 	await get_tree().create_timer(duration + 0.05).timeout
@@ -91,6 +95,8 @@ func _on_work_pressed() -> void:
 			main.set("state", state)
 			main.call("update_hud")
 			main.call("save_game")
+			_refresh_xp_bar(main)
+			_refresh_work_ui(main)
 	reward_pending = false
 
 func level_from_xp(xp: int) -> int:
