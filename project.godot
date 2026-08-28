@@ -10,6 +10,7 @@ run/main_scene="res://Main.tscn"
 WorkRewards="*res://work_rewards.gd"
 ShopUI="*res://shop_ui.gd"
 AxeAnimator="*res://axe_animator.gd"
+TabRouter="*res://tab_router.gd"
 
 [display]
 window/size/viewport_width=1600
