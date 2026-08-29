@@ -5,7 +5,8 @@ const HEARTBEAT_SECONDS: float = 5.0
 
 const SPLITTER_WAGE: float = 2.0
 const SAWYER_WAGE: float = 5.0
-const SAW_M3: float = 0.010
+const SAW_IN_M3: float = 0.025
+const SAW_OUT_M3: float = 0.033
 const CHOP_IN_M3: float = 0.010
 const CHOP_OUT_M3: float = 0.015
 const STORAGE_CAPACITY: float = 10.0
@@ -116,11 +117,11 @@ func _apply_offline_progress() -> void:
 func _do_sawyer_cycle(state: Dictionary) -> bool:
 	if float(state.get("money", 0.0)) < SAWYER_WAGE:
 		return false
-	if float(state.get("logs_m3", 0.0)) + 0.0001 < SAW_M3:
+	if float(state.get("logs_m3", 0.0)) + 0.0001 < SAW_IN_M3:
 		return false
 	state["money"] = float(state.get("money", 0.0)) - SAWYER_WAGE
-	state["logs_m3"] = maxf(0.0, float(state.get("logs_m3", 0.0)) - SAW_M3)
-	state["roundwood_m3"] = float(state.get("roundwood_m3", 0.0)) + SAW_M3
+	state["logs_m3"] = maxf(0.0, float(state.get("logs_m3", 0.0)) - SAW_IN_M3)
+	state["roundwood_m3"] = float(state.get("roundwood_m3", 0.0)) + SAW_OUT_M3
 	return true
 
 func _do_splitter_cycle(state: Dictionary) -> bool:
