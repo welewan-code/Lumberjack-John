@@ -20,7 +20,13 @@ var state: Dictionary = {
 	"employed": true,
 	"current_job": "helper",
 	"work_clicks": 0,
-	"chop_seeded": false
+	"chop_seeded": false,
+	"sawyer_hired": false,
+	"splitter_hired": false,
+	"sawyer_active": true,
+	"splitter_active": true,
+	"sawyer_tool": "",
+	"splitter_tool": "wooden"
 }
 
 var current_tab: String = "PRÁCE"
