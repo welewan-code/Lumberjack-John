@@ -7,8 +7,10 @@ const CHOP_OUT_M3: float = 0.015
 const SPLITTER_WAGE: float = 2.0
 const SAWYER_WAGE: float = 5.0
 const SAW_M3: float = 0.010
-const SPLITTER_TIME: float = 1.8
-const SAWYER_TIME: float = 3.0
+const SPLITTER_TIME_WOODEN: float = 1.8
+const SPLITTER_TIME_SHARPENED: float = 1.6
+const SAWYER_TIME_FRAME: float = 3.0
+const SAWYER_TIME_AKU: float = 1.5
 
 var last_tab: String = ""
 var smelinar_amount: SpinBox = null
@@ -77,7 +79,7 @@ func _render_company(main: Node) -> void:
 
 	var state: Dictionary = _state(main)
 	if bool(state.get("sawyer_hired", false)):
-		_add_worker_sprite(scene, "res://assets/characters/sawyer_1.png", Vector2(45, 215), Vector2(210, 240))
+		_add_worker_field(main, scene, "sawyer", Vector2(35, 205), Vector2(220, 275), "res://assets/characters/sawyer_1.png")
 	else:
 		var saw_slot: Button = _colleague_slot(main, "+\nKÁMOŠ NA BRIGÁDU\nŘEZÁNÍ NA KOZE\n5 Kč / ŘEZ")
 		saw_slot.position = Vector2(45, 235)
@@ -86,7 +88,7 @@ func _render_company(main: Node) -> void:
 		scene.add_child(saw_slot)
 
 	if bool(state.get("splitter_hired", false)):
-		_add_worker_sprite(scene, "res://assets/characters/splitter_wood_1.png", Vector2(690, 330), Vector2(210, 250))
+		_add_worker_field(main, scene, "splitter", Vector2(680, 320), Vector2(220, 285), "res://assets/characters/splitter_wood_1.png")
 	else:
 		var splitter_slot: Button = _colleague_slot(main, "+\nKÁMOŠ NA BRIGÁDU\nŠTÍPÁNÍ\n2 Kč / ŠPALEK")
 		splitter_slot.position = Vector2(700, 350)
@@ -120,8 +122,8 @@ func _render_company(main: Node) -> void:
 	action.z_index = 7
 	scene.add_child(action)
 	var am: MarginContainer = MarginContainer.new()
-	for side: String in ["margin_left", "margin_right"]:
-		am.add_theme_constant_override(side, 10)
+	am.add_theme_constant_override("margin_left", 10)
+	am.add_theme_constant_override("margin_right", 10)
 	am.add_theme_constant_override("margin_top", 7)
 	am.add_theme_constant_override("margin_bottom", 7)
 	action.add_child(am)
@@ -148,6 +150,164 @@ func _colleague_slot(main: Node, text_value: String) -> Button:
 	button.z_index = 4
 	return button
 
+func _add_worker_field(main: Node, scene: Control, worker: String, pos: Vector2, field_size: Vector2, sprite_path: String) -> void:
+	var state: Dictionary = _state(main)
+	var field: Button = Button.new()
+	field.position = pos
+	field.size = field_size
+	field.z_index = 4
+	field.add_theme_stylebox_override("normal", _style(main, "#17141122", "#9b7447", 10, 2))
+	field.add_theme_stylebox_override("hover", _style(main, "#241c1566", "#d09b57", 10, 2))
+	field.pressed.connect(_show_worker_panel.bind(worker))
+	scene.add_child(field)
+
+	var sprite: TextureRect = TextureRect.new()
+	sprite.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sprite.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	sprite.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if ResourceLoader.exists(sprite_path):
+		var resource: Resource = ResourceLoader.load(sprite_path)
+		if resource is Texture2D:
+			sprite.texture = resource as Texture2D
+	field.add_child(sprite)
+
+	var status: Label = _label(main, _worker_field_text(worker, state), 12)
+	status.anchor_left = 0.0
+	status.anchor_right = 1.0
+	status.anchor_top = 1.0
+	status.anchor_bottom = 1.0
+	status.offset_left = 4.0
+	status.offset_right = -4.0
+	status.offset_top = -48.0
+	status.offset_bottom = -5.0
+	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	field.add_child(status)
+
+func _worker_field_text(worker: String, state: Dictionary) -> String:
+	var active: bool = bool(state.get(worker + "_active", true))
+	var tool: String = str(state.get(worker + "_tool", ""))
+	var status: String = "PRACUJE" if active and tool != "" else "STOP"
+	if active and tool == "":
+		status = "BEZ NÁSTROJE"
+	return "%s\n%s" % [status, _tool_name(tool)]
+
+func _show_worker_panel(worker: String) -> void:
+	var main: Node = get_tree().current_scene
+	if main == null:
+		return
+	var state: Dictionary = _state(main)
+	var dialog: AcceptDialog = AcceptDialog.new()
+	dialog.title = "Řezač – nastavení" if worker == "sawyer" else "Štípač – nastavení"
+	dialog.ok_button_text = "ZAVŘÍT"
+	var box: VBoxContainer = VBoxContainer.new()
+	box.custom_minimum_size = Vector2(430, 250)
+	box.add_theme_constant_override("separation", 10)
+	dialog.add_child(box)
+	var info: Label = _label(main, "Kliknutím měníš práci a nástroj zaměstnance.", 14)
+	box.add_child(info)
+
+	var tool_label: Label = _label(main, "NÁSTROJ", 15)
+	tool_label.add_theme_color_override("font_color", Color("#ffca42"))
+	box.add_child(tool_label)
+	var tools: OptionButton = OptionButton.new()
+	tools.custom_minimum_size.y = 38
+	_populate_worker_tools(main, tools, worker)
+	_select_worker_tool(tools, str(state.get(worker + "_tool", "")))
+	tools.item_selected.connect(_on_worker_tool_selected.bind(worker, tools, dialog))
+	box.add_child(tools)
+
+	var active: bool = bool(state.get(worker + "_active", true))
+	var toggle: Button = Button.new()
+	toggle.text = "ZASTAVIT PRÁCI" if active else "SPUSTIT PRÁCI"
+	toggle.custom_minimum_size.y = 42
+	if not active and str(state.get(worker + "_tool", "")) == "":
+		toggle.disabled = true
+		toggle.tooltip_text = "Nejdřív vyber nástroj."
+	toggle.pressed.connect(_toggle_worker.bind(worker, dialog))
+	box.add_child(toggle)
+
+	var wage_text: String = "5 Kč / řez" if worker == "sawyer" else "2 Kč / špalek"
+	box.add_child(_label(main, "Mzda: " + wage_text, 13))
+	main.add_child(dialog)
+	dialog.popup_centered(Vector2i(480, 330))
+
+func _populate_worker_tools(main: Node, tools: OptionButton, worker: String) -> void:
+	if worker == "sawyer":
+		tools.add_item("Bez nástroje")
+		tools.set_item_metadata(tools.item_count - 1, "")
+		if _owned_shop_item("frame_saw") > 0:
+			tools.add_item("Rámová pila – 3,0 s / řez")
+			tools.set_item_metadata(tools.item_count - 1, "frame_saw")
+		if _owned_shop_item("aku_saw") > 0:
+			tools.add_item("Aku pila – 1,5 s / řez")
+			tools.set_item_metadata(tools.item_count - 1, "aku_saw")
+	else:
+		tools.add_item("Tupá sekera – 1,8 s / špalek")
+		tools.set_item_metadata(tools.item_count - 1, "wooden")
+		var state: Dictionary = _state(main)
+		if int(state.get("sharpened_axe_qty", 0)) > 0 or _owned_shop_item("sharpened_axe") > 0:
+			tools.add_item("Nabroušená sekera – 1,6 s / špalek")
+			tools.set_item_metadata(tools.item_count - 1, "sharpened")
+
+func _select_worker_tool(tools: OptionButton, tool_id: String) -> void:
+	for index: int in range(tools.item_count):
+		if str(tools.get_item_metadata(index)) == tool_id:
+			tools.select(index)
+			return
+	tools.select(0)
+
+func _on_worker_tool_selected(index: int, worker: String, tools: OptionButton, dialog: AcceptDialog) -> void:
+	var main: Node = get_tree().current_scene
+	if main == null:
+		return
+	var state: Dictionary = _state(main)
+	var tool_id: String = str(tools.get_item_metadata(index))
+	state[worker + "_tool"] = tool_id
+	if tool_id == "":
+		state[worker + "_active"] = false
+	main.set("state", state)
+	if main.has_method("save_game"):
+		main.call("save_game")
+	if is_instance_valid(dialog):
+		dialog.queue_free()
+	call_deferred("_render_company", main)
+
+func _toggle_worker(worker: String, dialog: AcceptDialog) -> void:
+	var main: Node = get_tree().current_scene
+	if main == null:
+		return
+	var state: Dictionary = _state(main)
+	var tool_id: String = str(state.get(worker + "_tool", ""))
+	if tool_id == "":
+		return
+	state[worker + "_active"] = not bool(state.get(worker + "_active", true))
+	main.set("state", state)
+	if main.has_method("save_game"):
+		main.call("save_game")
+	if is_instance_valid(dialog):
+		dialog.queue_free()
+	call_deferred("_render_company", main)
+
+func _owned_shop_item(item_id: String) -> int:
+	var shop: Node = get_node_or_null("/root/ShopUI")
+	if shop == null:
+		return 0
+	var value: Variant = shop.get("inventory")
+	if value is Dictionary:
+		return int((value as Dictionary).get(item_id, 0))
+	return 0
+
+func _tool_name(tool_id: String) -> String:
+	match tool_id:
+		"frame_saw": return "Rámová pila"
+		"aku_saw": return "Aku pila"
+		"wooden": return "Tupá sekera"
+		"sharpened": return "Nabroušená sekera"
+		_: return "Bez nástroje"
+
 func _show_hire_dialog(worker: String) -> void:
 	var main: Node = get_tree().current_scene
 	if main == null:
@@ -155,10 +315,10 @@ func _show_hire_dialog(worker: String) -> void:
 	var dialog: ConfirmationDialog = ConfirmationDialog.new()
 	if worker == "sawyer":
 		dialog.title = "Kámoš na brigádu – řezání"
-		dialog.dialog_text = "Najmout kámoše na řezání na koze?\nMzda: 5 Kč za každý řez.\nBude řezat automaticky, dokud jsou klády a peníze."
+		dialog.dialog_text = "Najmout kámoše na řezání na koze?\nMzda: 5 Kč za každý řez.\nPo najmutí mu přiřaď koupenou pilu."
 	else:
 		dialog.title = "Kámoš na brigádu – štípání"
-		dialog.dialog_text = "Najmout kámoše na štípání?\nMzda: 2 Kč za každý špalek.\nBude štípat automaticky, dokud jsou špalky, místo ve skladu a peníze."
+		dialog.dialog_text = "Najmout kámoše na štípání?\nMzda: 2 Kč za každý špalek.\nPo najmutí můžeš měnit jeho sekeru."
 	dialog.ok_button_text = "NAJMOUT"
 	dialog.cancel_button_text = "ZRUŠIT"
 	main.add_child(dialog)
@@ -172,6 +332,12 @@ func _confirm_hire(worker: String, dialog: ConfirmationDialog) -> void:
 		return
 	var state: Dictionary = _state(main)
 	state[worker + "_hired"] = true
+	if worker == "sawyer":
+		state["sawyer_tool"] = ""
+		state["sawyer_active"] = false
+	else:
+		state["splitter_tool"] = "wooden"
+		state["splitter_active"] = true
 	main.set("state", state)
 	if main.has_method("save_game"):
 		main.call("save_game")
@@ -182,18 +348,25 @@ func _confirm_hire(worker: String, dialog: ConfirmationDialog) -> void:
 func _process_workers(main: Node, delta: float) -> void:
 	var state: Dictionary = _state(main)
 	var changed: bool = false
-	if bool(state.get("sawyer_hired", false)):
+	var saw_tool: String = str(state.get("sawyer_tool", ""))
+	if bool(state.get("sawyer_hired", false)) and bool(state.get("sawyer_active", true)) and _worker_tool_valid(main, "sawyer", saw_tool):
 		sawyer_elapsed += delta
-		if sawyer_elapsed >= SAWYER_TIME:
+		var saw_time: float = SAWYER_TIME_AKU if saw_tool == "aku_saw" else SAWYER_TIME_FRAME
+		if sawyer_elapsed >= saw_time:
 			sawyer_elapsed = 0.0
 			if float(state.get("money", 0.0)) >= SAWYER_WAGE and float(state.get("logs_m3", 0.0)) + 0.0001 >= SAW_M3:
 				state["money"] = float(state.get("money", 0.0)) - SAWYER_WAGE
 				state["logs_m3"] = maxf(0.0, float(state.get("logs_m3", 0.0)) - SAW_M3)
 				state["roundwood_m3"] = float(state.get("roundwood_m3", 0.0)) + SAW_M3
 				changed = true
-	if bool(state.get("splitter_hired", false)):
+	else:
+		sawyer_elapsed = 0.0
+
+	var splitter_tool: String = str(state.get("splitter_tool", "wooden"))
+	if bool(state.get("splitter_hired", false)) and bool(state.get("splitter_active", true)) and _worker_tool_valid(main, "splitter", splitter_tool):
 		splitter_elapsed += delta
-		if splitter_elapsed >= SPLITTER_TIME:
+		var split_time: float = SPLITTER_TIME_SHARPENED if splitter_tool == "sharpened" else SPLITTER_TIME_WOODEN
+		if splitter_elapsed >= split_time:
 			splitter_elapsed = 0.0
 			var net_growth: float = CHOP_OUT_M3 - CHOP_IN_M3
 			if float(state.get("money", 0.0)) >= SPLITTER_WAGE and float(state.get("roundwood_m3", 0.0)) + 0.0001 >= CHOP_IN_M3 and _storage_used(state) + net_growth <= STORAGE_CAPACITY + 0.0001:
@@ -201,6 +374,8 @@ func _process_workers(main: Node, delta: float) -> void:
 				state["roundwood_m3"] = maxf(0.0, float(state.get("roundwood_m3", 0.0)) - CHOP_IN_M3)
 				state["split_m3"] = float(state.get("split_m3", 0.0)) + CHOP_OUT_M3
 				changed = true
+	else:
+		splitter_elapsed = 0.0
 	if changed:
 		main.set("state", state)
 		if main.has_method("update_hud"):
@@ -208,19 +383,14 @@ func _process_workers(main: Node, delta: float) -> void:
 		if main.has_method("save_game"):
 			main.call("save_game")
 
-func _add_worker_sprite(scene: Control, path: String, pos: Vector2, sprite_size: Vector2) -> void:
-	var worker: TextureRect = TextureRect.new()
-	worker.position = pos
-	worker.size = sprite_size
-	worker.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	worker.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	worker.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	worker.z_index = 4
-	if ResourceLoader.exists(path):
-		var resource: Resource = ResourceLoader.load(path)
-		if resource is Texture2D:
-			worker.texture = resource as Texture2D
-	scene.add_child(worker)
+func _worker_tool_valid(main: Node, worker: String, tool_id: String) -> bool:
+	if worker == "sawyer":
+		return (tool_id == "frame_saw" or tool_id == "aku_saw") and _owned_shop_item(tool_id) > 0
+	if tool_id == "wooden":
+		return true
+	if tool_id == "sharpened":
+		return int(_state(main).get("sharpened_axe_qty", 0)) > 0 or _owned_shop_item("sharpened_axe") > 0
+	return false
 
 func _build_left(main: Node) -> PanelContainer:
 	var panel: PanelContainer = _side_panel(main, 250)
@@ -299,11 +469,13 @@ func _start_chop() -> void:
 		return
 	var state: Dictionary = _state(main)
 	if float(state.get("roundwood_m3", 0.0)) + 0.0001 < CHOP_IN_M3:
-		if is_instance_valid(chop_timer): chop_timer.text = "Nemáš špalky"
+		if is_instance_valid(chop_timer):
+			chop_timer.text = "Nemáš špalky"
 		return
 	var net_growth: float = CHOP_OUT_M3 - CHOP_IN_M3
 	if _storage_used(state) + net_growth > STORAGE_CAPACITY + 0.0001:
-		if is_instance_valid(chop_timer): chop_timer.text = "Sklad je plný"
+		if is_instance_valid(chop_timer):
+			chop_timer.text = "Sklad je plný"
 		return
 	chop_running = true
 	chop_elapsed = 0.0
@@ -311,14 +483,19 @@ func _start_chop() -> void:
 	if is_instance_valid(chop_progress):
 		chop_progress.max_value = chop_duration
 		chop_progress.value = 0.0
-	if is_instance_valid(chop_button): chop_button.disabled = true
+	if is_instance_valid(chop_button):
+		chop_button.disabled = true
 
 func _process_chop(main: Node, delta: float) -> void:
-	if not chop_running: return
+	if not chop_running:
+		return
 	chop_elapsed += delta
-	if is_instance_valid(chop_progress): chop_progress.value = chop_elapsed
-	if is_instance_valid(chop_timer): chop_timer.text = "Štípám... %.1f s" % maxf(0.0, chop_duration - chop_elapsed)
-	if chop_elapsed < chop_duration: return
+	if is_instance_valid(chop_progress):
+		chop_progress.value = chop_elapsed
+	if is_instance_valid(chop_timer):
+		chop_timer.text = "Štípám... %.1f s" % maxf(0.0, chop_duration - chop_elapsed)
+	if chop_elapsed < chop_duration:
+		return
 	chop_running = false
 	var state: Dictionary = _state(main)
 	var available: float = float(state.get("roundwood_m3", 0.0))
@@ -327,20 +504,27 @@ func _process_chop(main: Node, delta: float) -> void:
 		state["roundwood_m3"] = maxf(0.0, available - CHOP_IN_M3)
 		state["split_m3"] = float(state.get("split_m3", 0.0)) + CHOP_OUT_M3
 		main.set("state", state)
-		if main.has_method("update_hud"): main.call("update_hud")
-		if main.has_method("save_game"): main.call("save_game")
-		if is_instance_valid(chop_timer): chop_timer.text = "+0,015 m³ štípaného"
-	if is_instance_valid(chop_progress): chop_progress.value = 0.0
-	if is_instance_valid(chop_button): chop_button.disabled = false
+		if main.has_method("update_hud"):
+			main.call("update_hud")
+		if main.has_method("save_game"):
+			main.call("save_game")
+		if is_instance_valid(chop_timer):
+			chop_timer.text = "+0,015 m³ štípaného"
+	if is_instance_valid(chop_progress):
+		chop_progress.value = 0.0
+	if is_instance_valid(chop_button):
+		chop_button.disabled = false
 	_refresh_storage_label(main)
 	_refresh_smelinar(main)
 
 func _render_storage(main: Node) -> void:
 	var host: MarginContainer = _host(main)
-	if host == null: return
+	if host == null:
+		return
 	_clear(host)
 	await get_tree().process_frame
-	if not is_instance_valid(host): return
+	if not is_instance_valid(host):
+		return
 	var panel: PanelContainer = PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -403,17 +587,21 @@ func _add_storage_card(main: Node, grid: GridContainer, title_text: String, amou
 
 func _sell_to_smelinar() -> void:
 	var main: Node = get_tree().current_scene
-	if main == null or not is_instance_valid(smelinar_amount): return
+	if main == null or not is_instance_valid(smelinar_amount):
+		return
 	var state: Dictionary = _state(main)
 	var available: float = float(state.get("split_m3", 0.0))
 	var amount: float = snappedf(float(smelinar_amount.value), 0.1)
-	if amount < 0.1 or amount > available + 0.0001: return
+	if amount < 0.1 or amount > available + 0.0001:
+		return
 	state["split_m3"] = maxf(0.0, available - amount)
 	state["money"] = float(state.get("money", 0.0)) + amount * SMELINAR_PRICE_PER_M3
 	state["xp"] = int(state.get("xp", 0)) + int(round(amount * 10.0))
 	main.set("state", state)
-	if main.has_method("update_hud"): main.call("update_hud")
-	if main.has_method("save_game"): main.call("save_game")
+	if main.has_method("update_hud"):
+		main.call("update_hud")
+	if main.has_method("save_game"):
+		main.call("save_game")
 	_refresh_smelinar(main)
 	_refresh_storage_label(main)
 
@@ -421,37 +609,46 @@ func _on_smelinar_amount_changed(_value: float) -> void:
 	_update_smelinar_value()
 
 func _refresh_smelinar(main: Node) -> void:
-	if not is_instance_valid(smelinar_amount): return
+	if not is_instance_valid(smelinar_amount):
+		return
 	var available: float = maxf(0.0, float(_state(main).get("split_m3", 0.0)))
 	var sellable: float = floor(available * 10.0 + 0.0001) / 10.0
-	if is_instance_valid(smelinar_stock_label): smelinar_stock_label.text = "Štípané: %.1f m³" % available
+	if is_instance_valid(smelinar_stock_label):
+		smelinar_stock_label.text = "Štípané: %.1f m³" % available
 	smelinar_amount.max_value = maxf(0.1, sellable)
-	if smelinar_amount.value > smelinar_amount.max_value: smelinar_amount.value = smelinar_amount.max_value
-	if is_instance_valid(smelinar_sell_button): smelinar_sell_button.disabled = sellable < 0.1
+	if smelinar_amount.value > smelinar_amount.max_value:
+		smelinar_amount.value = smelinar_amount.max_value
+	if is_instance_valid(smelinar_sell_button):
+		smelinar_sell_button.disabled = sellable < 0.1
 	_update_smelinar_value()
 
 func _update_smelinar_value() -> void:
-	if not is_instance_valid(smelinar_amount) or not is_instance_valid(smelinar_value_label): return
+	if not is_instance_valid(smelinar_amount) or not is_instance_valid(smelinar_value_label):
+		return
 	smelinar_value_label.text = "Dostaneš: %.0f Kč" % (float(smelinar_amount.value) * SMELINAR_PRICE_PER_M3)
 
 func _refresh_storage_label(main: Node) -> void:
-	if is_instance_valid(storage_label): storage_label.text = "%.3f / 10.0 m³" % _storage_used(_state(main))
+	if is_instance_valid(storage_label):
+		storage_label.text = "%.3f / 10.0 m³" % _storage_used(_state(main))
 
 func _storage_used(state: Dictionary) -> float:
 	return float(state.get("logs_m3", 0.0)) + float(state.get("roundwood_m3", 0.0)) + float(state.get("split_m3", 0.0))
 
 func _host(main: Node) -> MarginContainer:
 	var value: Variant = main.get("content_host")
-	if value is MarginContainer: return value as MarginContainer
+	if value is MarginContainer:
+		return value as MarginContainer
 	return null
 
 func _state(main: Node) -> Dictionary:
 	var value: Variant = main.get("state")
-	if value is Dictionary: return value as Dictionary
+	if value is Dictionary:
+		return value as Dictionary
 	return {}
 
 func _clear(host: MarginContainer) -> void:
-	for child: Node in host.get_children(): child.queue_free()
+	for child: Node in host.get_children():
+		child.queue_free()
 
 func _side_panel(main: Node, width: float) -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
@@ -476,10 +673,12 @@ func _side_box(panel: PanelContainer) -> VBoxContainer:
 func _load_player_texture(main: Node) -> Texture2D:
 	var equipped: String = str(_state(main).get("equipped_axe", "wooden"))
 	var path: String = "res://assets/characters/player_wood_1.png"
-	if equipped == "sharpened": path = "res://assets/characters/player_sharp_1.png"
+	if equipped == "sharpened":
+		path = "res://assets/characters/player_sharp_1.png"
 	if ResourceLoader.exists(path):
 		var resource: Resource = ResourceLoader.load(path)
-		if resource is Texture2D: return resource as Texture2D
+		if resource is Texture2D:
+			return resource as Texture2D
 	return null
 
 func _load_company_background() -> Texture2D:
@@ -487,17 +686,20 @@ func _load_company_background() -> Texture2D:
 	for candidate: String in candidates:
 		if ResourceLoader.exists(candidate):
 			var resource: Resource = ResourceLoader.load(candidate)
-			if resource is Texture2D: return resource as Texture2D
+			if resource is Texture2D:
+				return resource as Texture2D
 	return null
 
 func _label(main: Node, text_value: String, size: int) -> Label:
 	var value: Variant = main.call("make_label", text_value, size)
-	if value is Label: return value as Label
+	if value is Label:
+		return value as Label
 	var label: Label = Label.new()
 	label.text = text_value
 	return label
 
 func _style(main: Node, bg: String, border: String, radius: int, width: int) -> StyleBoxFlat:
 	var value: Variant = main.call("panel_style", bg, border, radius, width)
-	if value is StyleBoxFlat: return value as StyleBoxFlat
+	if value is StyleBoxFlat:
+		return value as StyleBoxFlat
 	return StyleBoxFlat.new()
