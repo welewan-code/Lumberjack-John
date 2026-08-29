@@ -47,8 +47,6 @@ func has_active_contract() -> bool:
 
 func can_accept_delivery(amount: float = DELIVERY_STEP_M3) -> bool:
 	_cleanup_expired(_now())
-	if active_contracts.is_empty():
-		return false
 	for contract: Dictionary in active_contracts:
 		var remaining: float = float(contract.get("volume_m3", 0.0)) - float(contract.get("delivered_m3", 0.0))
 		if remaining + 0.0001 >= amount:
@@ -56,14 +54,12 @@ func can_accept_delivery(amount: float = DELIVERY_STEP_M3) -> bool:
 	return false
 
 func register_delivery(main: Node, amount: float = DELIVERY_STEP_M3) -> Dictionary:
-	var now: int = _now()
-	_cleanup_expired(now)
+	_cleanup_expired(_now())
 	for index: int in range(active_contracts.size()):
 		var contract: Dictionary = active_contracts[index]
 		var volume: float = float(contract.get("volume_m3", 0.0))
 		var delivered: float = float(contract.get("delivered_m3", 0.0))
-		var remaining: float = volume - delivered
-		if remaining + 0.0001 < amount:
+		if volume - delivered + 0.0001 < amount:
 			continue
 		contract["delivered_m3"] = snappedf(delivered + amount, 0.1)
 		active_contracts[index] = contract
@@ -87,31 +83,19 @@ func register_delivery(main: Node, amount: float = DELIVERY_STEP_M3) -> Dictiona
 
 func _generate_offer(now: int) -> void:
 	var volume: float = float(randi_range(1, 5)) / 10.0
-	var price: int = _roll_price()
-	current_offer = {
-		"id": next_id,
-		"volume_m3": volume,
-		"price_per_m3": price,
-		"expires_at": now + OFFER_LIFETIME
-	}
+	current_offer = {"id": next_id, "volume_m3": volume, "price_per_m3": _roll_price(), "expires_at": now + OFFER_LIFETIME}
 	next_id += 1
 	next_offer_at = 0
 	ui_signature = ""
 
 func _roll_price() -> int:
 	var roll: int = randi_range(1, 100)
-	if roll <= 25:
-		return 1100
-	if roll <= 45:
-		return 1125
-	if roll <= 62:
-		return 1150
-	if roll <= 76:
-		return 1175
-	if roll <= 87:
-		return 1200
-	if roll <= 95:
-		return 1225
+	if roll <= 25: return 1100
+	if roll <= 45: return 1125
+	if roll <= 62: return 1150
+	if roll <= 76: return 1175
+	if roll <= 87: return 1200
+	if roll <= 95: return 1225
 	return 1250
 
 func _schedule_next_offer(now: int) -> void:
@@ -162,7 +146,7 @@ func _ensure_ui(main: Node, now: int) -> void:
 	if existing != null and signature == ui_signature:
 		return
 	if existing != null:
-		existing.queue_free()
+		existing.free()
 	var panel: PanelContainer = PanelContainer.new()
 	panel.name = "NeighborContractsPanel"
 	panel.add_theme_stylebox_override("panel", _style(main, "#171411", "#79512e", 7, 1))
@@ -178,11 +162,9 @@ func _ensure_ui(main: Node, now: int) -> void:
 	var title: Label = _label(main, "SOUSEDI", 16)
 	title.add_theme_color_override("font_color", Color("#ffca42"))
 	content.add_child(title)
-
 	if current_offer.is_empty():
-		var wait_seconds: int = maxi(0, next_offer_at - now)
 		content.add_child(_label(main, "Teď nikdo nic nechce.", 12))
-		content.add_child(_label(main, "Další možnost asi za %s" % _time_text(wait_seconds), 11))
+		content.add_child(_label(main, "Další možnost asi za %s" % _time_text(maxi(0, next_offer_at - now)), 11))
 	else:
 		var volume: float = float(current_offer.get("volume_m3", 0.0))
 		var price: int = int(current_offer.get("price_per_m3", 0))
@@ -195,7 +177,6 @@ func _ensure_ui(main: Node, now: int) -> void:
 		accept.custom_minimum_size.y = 30
 		accept.pressed.connect(_accept_offer)
 		content.add_child(accept)
-
 	if not active_contracts.is_empty():
 		content.add_child(_label(main, "ROZJETÉ ZAKÁZKY: %d" % active_contracts.size(), 12))
 		for contract: Dictionary in active_contracts:
@@ -203,7 +184,6 @@ func _ensure_ui(main: Node, now: int) -> void:
 			var delivered: float = float(contract.get("delivered_m3", 0.0))
 			var left: int = maxi(0, int(contract.get("expires_at", 0)) - now)
 			content.add_child(_label(main, "%.1f/%.1f m³ • %s" % [delivered, volume, _time_text(left)], 11))
-
 	box.add_child(panel)
 	box.move_child(panel, 1)
 	ui_signature = signature
@@ -219,67 +199,49 @@ func _make_signature(now: int) -> String:
 
 func _jobs_box(main: Node) -> VBoxContainer:
 	var host_value: Variant = main.get("content_host")
-	if not (host_value is MarginContainer):
-		return null
+	if not (host_value is MarginContainer): return null
 	var host: MarginContainer = host_value as MarginContainer
-	if host.get_child_count() == 0:
-		return null
+	if host.get_child_count() == 0: return null
 	var row: Node = host.get_child(0)
-	if not (row is HBoxContainer) or row.get_child_count() < 3:
-		return null
+	if not (row is HBoxContainer) or row.get_child_count() < 3: return null
 	var right: Node = row.get_child(2)
-	if not (right is PanelContainer) or right.get_child_count() == 0:
-		return null
+	if not (right is PanelContainer) or right.get_child_count() == 0: return null
 	var margin: Node = right.get_child(0)
-	if not (margin is MarginContainer) or margin.get_child_count() == 0:
-		return null
+	if not (margin is MarginContainer) or margin.get_child_count() == 0: return null
 	var box: Node = margin.get_child(0)
-	if box is VBoxContainer:
-		return box as VBoxContainer
+	if box is VBoxContainer: return box as VBoxContainer
 	return null
 
 func _time_text(seconds: int) -> String:
-	var minutes: int = seconds / 60
-	var rest: int = seconds % 60
-	return "%d:%02d" % [minutes, rest]
+	return "%d:%02d" % [seconds / 60, seconds % 60]
 
 func _now() -> int:
 	return int(Time.get_unix_time_from_system())
 
 func _main_state(main: Node) -> Dictionary:
 	var value: Variant = main.get("state")
-	if value is Dictionary:
-		return value as Dictionary
+	if value is Dictionary: return value as Dictionary
 	return {}
 
 func _save_state() -> void:
 	var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
-	if file == null:
-		return
-	file.store_string(JSON.stringify({
-		"current_offer": current_offer,
-		"active_contracts": active_contracts,
-		"next_offer_at": next_offer_at,
-		"next_id": next_id
-	}))
+	if file != null:
+		file.store_string(JSON.stringify({"current_offer": current_offer, "active_contracts": active_contracts, "next_offer_at": next_offer_at, "next_id": next_id}))
 
 func _load_state() -> void:
-	if not FileAccess.file_exists(SAVE_PATH):
-		return
+	if not FileAccess.file_exists(SAVE_PATH): return
 	var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.READ)
-	if file == null:
-		return
+	if file == null: return
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	if not (parsed is Dictionary):
-		return
+	if not (parsed is Dictionary): return
 	var data: Dictionary = parsed as Dictionary
 	var offer_value: Variant = data.get("current_offer", {})
-	if offer_value is Dictionary:
-		current_offer = offer_value as Dictionary
+	if offer_value is Dictionary: current_offer = offer_value as Dictionary
 	var active_value: Variant = data.get("active_contracts", [])
 	if active_value is Array:
 		active_contracts.clear()
-		for item: Variant in active_value as Array:
+		var loaded_array: Array = active_value as Array
+		for item: Variant in loaded_array:
 			if item is Dictionary:
 				active_contracts.append(item as Dictionary)
 	next_offer_at = int(data.get("next_offer_at", 0))
@@ -287,14 +249,12 @@ func _load_state() -> void:
 
 func _label(main: Node, text_value: String, size: int) -> Label:
 	var value: Variant = main.call("make_label", text_value, size)
-	if value is Label:
-		return value as Label
+	if value is Label: return value as Label
 	var label: Label = Label.new()
 	label.text = text_value
 	return label
 
 func _style(main: Node, bg: String, border: String, radius: int, width: int) -> StyleBoxFlat:
 	var value: Variant = main.call("panel_style", bg, border, radius, width)
-	if value is StyleBoxFlat:
-		return value as StyleBoxFlat
+	if value is StyleBoxFlat: return value as StyleBoxFlat
 	return StyleBoxFlat.new()
