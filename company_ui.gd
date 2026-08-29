@@ -410,6 +410,7 @@ func _sell_to_smelinar() -> void:
 	if amount < 0.1 or amount > available + 0.0001: return
 	state["split_m3"] = maxf(0.0, available - amount)
 	state["money"] = float(state.get("money", 0.0)) + amount * SMELINAR_PRICE_PER_M3
+	state["xp"] = int(state.get("xp", 0)) + int(round(amount * 10.0))
 	main.set("state", state)
 	if main.has_method("update_hud"): main.call("update_hud")
 	if main.has_method("save_game"): main.call("save_game")
