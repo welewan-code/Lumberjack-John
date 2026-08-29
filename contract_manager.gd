@@ -1,9 +1,12 @@
 extends Node
 
 const SAVE_PATH: String = "user://neighbor_contracts.json"
+const OFFLINE_PATH: String = "user://drevo_tycoon_offline.json"
 const OFFER_LIFETIME: int = 120
 const ACTIVE_LIFETIME: int = 300
 const DELIVERY_STEP_M3: float = 0.1
+const DELIVERY_WAGE: float = 5.0
+const DELIVERY_SECONDS: int = 5
 
 var current_offer: Dictionary = {}
 var active_contracts: Array[Dictionary] = []
@@ -11,17 +14,27 @@ var next_offer_at: int = 0
 var next_id: int = 1
 var tick_elapsed: float = 0.0
 var ui_signature: String = ""
+var startup_pending: bool = true
+var startup_wait: float = 0.0
+var offline_last_seen: int = 0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_load_state()
-	var now: int = _now()
-	_cleanup_expired(now)
-	if current_offer.is_empty() and next_offer_at <= 0:
-		next_offer_at = now + 5
-	_save_state()
+	offline_last_seen = _read_offline_last_seen()
 
 func _process(delta: float) -> void:
+	if startup_pending:
+		startup_wait += delta
+		var startup_main: Node = get_tree().current_scene
+		if startup_main != null:
+			_finish_startup(startup_main)
+		elif startup_wait < 2.0:
+			return
+		else:
+			startup_pending = false
+		return
+
 	tick_elapsed += delta
 	if tick_elapsed < 0.5:
 		return
@@ -40,6 +53,97 @@ func _process(delta: float) -> void:
 	var main: Node = get_tree().current_scene
 	if main != null and str(main.get("current_tab")) == "FIRMA":
 		_ensure_ui(main, now)
+
+func _finish_startup(main: Node) -> void:
+	var now: int = _now()
+	_apply_offline_transport(main, offline_last_seen, now)
+	_cleanup_expired(now)
+	if not current_offer.is_empty() and now >= int(current_offer.get("expires_at", 0)):
+		current_offer = {}
+		_schedule_next_offer(now)
+	if current_offer.is_empty() and next_offer_at <= 0:
+		next_offer_at = now + 5
+	_save_state()
+	startup_pending = false
+	if main.has_method("save_game"):
+		main.call("save_game")
+	if main.has_method("update_hud"):
+		main.call("update_hud")
+
+func _apply_offline_transport(main: Node, last_seen: int, now: int) -> void:
+	if last_seen <= 0 or now - last_seen < DELIVERY_SECONDS:
+		return
+	if active_contracts.is_empty():
+		return
+	if _selected_transport_tool(main) != "wheelbarrow":
+		return
+	if _owned_transport("wheelbarrow") <= 0:
+		return
+
+	var state: Dictionary = _main_state(main)
+	var cursor: int = last_seen
+	var safety: int = 0
+	var changed: bool = false
+
+	while safety < 5000:
+		safety += 1
+		var target_index: int = -1
+		var trip_time: int = 0
+		for index: int in range(active_contracts.size()):
+			var contract: Dictionary = active_contracts[index]
+			var volume: float = float(contract.get("volume_m3", 0.0))
+			var delivered: float = float(contract.get("delivered_m3", 0.0))
+			if volume - delivered + 0.0001 < DELIVERY_STEP_M3:
+				continue
+			var accepted_at: int = int(contract.get("accepted_at", last_seen))
+			var expires_at: int = int(contract.get("expires_at", 0))
+			var possible_time: int = maxi(cursor, accepted_at) + DELIVERY_SECONDS
+			if possible_time <= now and possible_time <= expires_at:
+				target_index = index
+				trip_time = possible_time
+				break
+		if target_index < 0:
+			break
+		if float(state.get("split_m3", 0.0)) + 0.0001 < DELIVERY_STEP_M3:
+			break
+		if float(state.get("money", 0.0)) < DELIVERY_WAGE:
+			break
+
+		state["split_m3"] = maxf(0.0, float(state.get("split_m3", 0.0)) - DELIVERY_STEP_M3)
+		state["money"] = float(state.get("money", 0.0)) - DELIVERY_WAGE
+		var target: Dictionary = active_contracts[target_index]
+		var volume: float = float(target.get("volume_m3", 0.0))
+		var delivered: float = float(target.get("delivered_m3", 0.0))
+		target["delivered_m3"] = snappedf(delivered + DELIVERY_STEP_M3, 0.1)
+		active_contracts[target_index] = target
+		cursor = trip_time
+		changed = true
+
+		if float(target.get("delivered_m3", 0.0)) + 0.0001 >= volume:
+			var payout: float = volume * float(target.get("price_per_m3", 0.0))
+			state["money"] = float(state.get("money", 0.0)) + payout
+			state["xp"] = int(state.get("xp", 0)) + int(round(volume * 10.0))
+			active_contracts.remove_at(target_index)
+
+	if changed:
+		main.set("state", state)
+		ui_signature = ""
+
+func _selected_transport_tool(main: Node) -> String:
+	var transport: Node = get_node_or_null("/root/TransportUI")
+	if transport != null and transport.has_method("get_selected_transport_tool"):
+		return str(transport.call("get_selected_transport_tool", main))
+	var state: Dictionary = _main_state(main)
+	return str(state.get("transport_tool", ""))
+
+func _owned_transport(item_id: String) -> int:
+	var shop: Node = get_node_or_null("/root/ShopUI")
+	if shop == null:
+		return 0
+	var value: Variant = shop.get("inventory")
+	if value is Dictionary:
+		return int((value as Dictionary).get(item_id, 0))
+	return 0
 
 func has_active_contract() -> bool:
 	_cleanup_expired(_now())
@@ -300,10 +404,21 @@ func _jobs_box(main: Node) -> VBoxContainer:
 	return null
 
 func _time_text(seconds: int) -> String:
-	return "%d:%02d" % [seconds / 60, seconds % 60]
+	return "%d:%02d" % [int(seconds / 60), seconds % 60]
 
 func _now() -> int:
 	return int(Time.get_unix_time_from_system())
+
+func _read_offline_last_seen() -> int:
+	if not FileAccess.file_exists(OFFLINE_PATH):
+		return 0
+	var file: FileAccess = FileAccess.open(OFFLINE_PATH, FileAccess.READ)
+	if file == null:
+		return 0
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	if parsed is Dictionary:
+		return int((parsed as Dictionary).get("last_seen", 0))
+	return 0
 
 func _main_state(main: Node) -> Dictionary:
 	var value: Variant = main.get("state")
