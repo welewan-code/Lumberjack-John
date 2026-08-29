@@ -6,11 +6,12 @@ const CHOP_IN_M3: float = 0.010
 const CHOP_OUT_M3: float = 0.015
 const SPLITTER_WAGE: float = 2.0
 const SAWYER_WAGE: float = 5.0
-const SAW_M3: float = 0.010
+const SAW_IN_M3: float = 0.025
+const SAW_OUT_M3: float = 0.033
 const SPLITTER_TIME_WOODEN: float = 1.8
 const SPLITTER_TIME_SHARPENED: float = 1.6
-const SAWYER_TIME_FRAME: float = 3.0
-const SAWYER_TIME_AKU: float = 1.5
+const SAWYER_TIME_FRAME: float = 20.0
+const SAWYER_TIME_AKU: float = 14.0
 
 var last_tab: String = ""
 var smelinar_amount: SpinBox = null
@@ -239,10 +240,10 @@ func _populate_worker_tools(main: Node, tools: OptionButton, worker: String) -> 
 		tools.add_item("Bez nástroje")
 		tools.set_item_metadata(tools.item_count - 1, "")
 		if _owned_shop_item("frame_saw") > 0:
-			tools.add_item("Rámová pila – 3,0 s / řez")
+			tools.add_item("Rámová pila – 20,0 s / řez")
 			tools.set_item_metadata(tools.item_count - 1, "frame_saw")
 		if _owned_shop_item("aku_saw") > 0:
-			tools.add_item("Aku pila – 1,5 s / řez")
+			tools.add_item("Aku pila – 14,0 s / řez")
 			tools.set_item_metadata(tools.item_count - 1, "aku_saw")
 	else:
 		tools.add_item("Tupá sekera – 1,8 s / špalek")
@@ -354,10 +355,11 @@ func _process_workers(main: Node, delta: float) -> void:
 		var saw_time: float = SAWYER_TIME_AKU if saw_tool == "aku_saw" else SAWYER_TIME_FRAME
 		if sawyer_elapsed >= saw_time:
 			sawyer_elapsed = 0.0
-			if float(state.get("money", 0.0)) >= SAWYER_WAGE and float(state.get("logs_m3", 0.0)) + 0.0001 >= SAW_M3:
+			var saw_net_growth: float = SAW_OUT_M3 - SAW_IN_M3
+			if float(state.get("money", 0.0)) >= SAWYER_WAGE and float(state.get("logs_m3", 0.0)) + 0.0001 >= SAW_IN_M3 and _storage_used(state) + saw_net_growth <= STORAGE_CAPACITY + 0.0001:
 				state["money"] = float(state.get("money", 0.0)) - SAWYER_WAGE
-				state["logs_m3"] = maxf(0.0, float(state.get("logs_m3", 0.0)) - SAW_M3)
-				state["roundwood_m3"] = float(state.get("roundwood_m3", 0.0)) + SAW_M3
+				state["logs_m3"] = maxf(0.0, float(state.get("logs_m3", 0.0)) - SAW_IN_M3)
+				state["roundwood_m3"] = float(state.get("roundwood_m3", 0.0)) + SAW_OUT_M3
 				changed = true
 	else:
 		sawyer_elapsed = 0.0
