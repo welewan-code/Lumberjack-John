@@ -161,6 +161,7 @@ func _ensure_ui(main: Node, now: int) -> void:
 		existing.queue_free()
 		ui_signature = ""
 		return
+
 	var panel: PanelContainer = PanelContainer.new()
 	panel.name = "NeighborContractsPanel"
 	panel.add_theme_stylebox_override("panel", _style(main, "#171411", "#79512e", 7, 1))
@@ -171,42 +172,78 @@ func _ensure_ui(main: Node, now: int) -> void:
 	margin.add_theme_constant_override("margin_bottom", 8)
 	panel.add_child(margin)
 	var content: VBoxContainer = VBoxContainer.new()
-	content.add_theme_constant_override("separation", 4)
+	content.add_theme_constant_override("separation", 7)
 	margin.add_child(content)
+
 	var title: Label = _label(main, "SOUSEDI", 16)
 	title.add_theme_color_override("font_color", Color("#ffca42"))
 	content.add_child(title)
 
+	var offer_panel: PanelContainer = PanelContainer.new()
+	offer_panel.name = "NeighborOfferPanel"
+	offer_panel.add_theme_stylebox_override("panel", _style(main, "#211b15", "#9b6a36", 6, 1))
+	var offer_margin: MarginContainer = MarginContainer.new()
+	offer_margin.add_theme_constant_override("margin_left", 8)
+	offer_margin.add_theme_constant_override("margin_right", 8)
+	offer_margin.add_theme_constant_override("margin_top", 6)
+	offer_margin.add_theme_constant_override("margin_bottom", 6)
+	offer_panel.add_child(offer_margin)
+	var offer_content: VBoxContainer = VBoxContainer.new()
+	offer_content.add_theme_constant_override("separation", 4)
+	offer_margin.add_child(offer_content)
+	content.add_child(offer_panel)
+
 	if current_offer.is_empty():
-		content.add_child(_label(main, "Teď nikdo nic nechce.", 12))
+		offer_content.add_child(_label(main, "Teď nikdo nic nechce.", 12))
 		var wait_label: Label = _label(main, "", 11)
 		wait_label.name = "NeighborWaitLabel"
-		content.add_child(wait_label)
+		offer_content.add_child(wait_label)
 	else:
 		var volume: float = float(current_offer.get("volume_m3", 0.0))
 		var price: int = int(current_offer.get("price_per_m3", 0))
 		var total: float = volume * float(price)
-		content.add_child(_label(main, "%.1f m³ štípaného • %d Kč/m³" % [volume, price], 12))
+		offer_content.add_child(_label(main, "%.1f m³ štípaného • %d Kč/m³" % [volume, price], 12))
 		var offer_timer: Label = _label(main, "", 11)
 		offer_timer.name = "NeighborOfferTimer"
 		offer_timer.set_meta("total", total)
-		content.add_child(offer_timer)
+		offer_content.add_child(offer_timer)
 		var accept: Button = Button.new()
 		accept.text = "VZÍT ZAKÁZKU"
 		accept.custom_minimum_size.y = 30
 		accept.pressed.connect(_accept_offer)
-		content.add_child(accept)
+		offer_content.add_child(accept)
 
 	if not active_contracts.is_empty():
-		content.add_child(_label(main, "ROZJETÉ ZAKÁZKY: %d" % active_contracts.size(), 12))
+		var active_title: Label = _label(main, "VZATÉ ZAKÁZKY", 12)
+		active_title.add_theme_color_override("font_color", Color("#d7b17a"))
+		content.add_child(active_title)
 		for contract: Dictionary in active_contracts:
 			var id: int = int(contract.get("id", 0))
+			var contract_panel: PanelContainer = PanelContainer.new()
+			contract_panel.name = "ActiveContractPanel_%d" % id
+			contract_panel.add_theme_stylebox_override("panel", _style(main, "#121716", "#4f7b66", 6, 1))
+			var contract_margin: MarginContainer = MarginContainer.new()
+			contract_margin.add_theme_constant_override("margin_left", 8)
+			contract_margin.add_theme_constant_override("margin_right", 8)
+			contract_margin.add_theme_constant_override("margin_top", 6)
+			contract_margin.add_theme_constant_override("margin_bottom", 6)
+			contract_panel.add_child(contract_margin)
+			var contract_content: VBoxContainer = VBoxContainer.new()
+			contract_content.add_theme_constant_override("separation", 2)
+			contract_margin.add_child(contract_content)
+
+			var contract_volume: float = float(contract.get("volume_m3", 0.0))
+			var contract_price: int = int(contract.get("price_per_m3", 0))
+			var contract_total: float = contract_volume * float(contract_price)
+			contract_content.add_child(_label(main, "Zakázka #%d • %.1f m³" % [id, contract_volume], 12))
+			contract_content.add_child(_label(main, "%d Kč/m³ • celkem %.0f Kč" % [contract_price, contract_total], 11))
 			var active_label: Label = _label(main, "", 11)
 			active_label.name = "ContractTimer_%d" % id
-			active_label.set_meta("volume", float(contract.get("volume_m3", 0.0)))
+			active_label.set_meta("volume", contract_volume)
 			active_label.set_meta("delivered", float(contract.get("delivered_m3", 0.0)))
 			active_label.set_meta("expires_at", int(contract.get("expires_at", 0)))
-			content.add_child(active_label)
+			contract_content.add_child(active_label)
+			content.add_child(contract_panel)
 
 	box.add_child(panel)
 	box.move_child(panel, mini(1, box.get_child_count() - 1))
@@ -230,7 +267,7 @@ func _refresh_countdowns(panel: Node, now: int) -> void:
 			var volume: float = float(contract.get("volume_m3", 0.0))
 			var delivered: float = float(contract.get("delivered_m3", 0.0))
 			var left: int = maxi(0, int(contract.get("expires_at", 0)) - now)
-			(node as Label).text = "%.1f/%.1f m³ • %s" % [delivered, volume, _time_text(left)]
+			(node as Label).text = "Odvezeno %.1f/%.1f m³ • zbývá %s" % [delivered, volume, _time_text(left)]
 
 func _make_signature() -> String:
 	var offer_part: String = "none:%d" % next_offer_at
