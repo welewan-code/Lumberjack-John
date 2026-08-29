@@ -18,6 +18,8 @@ func _process(delta: float) -> void:
 	if str(main.get("current_tab")) == "FIRMA":
 		_ensure_transport_slot(main)
 	_process_transport(main, delta)
+	if not transport_running:
+		_try_auto_start(main)
 
 func _ensure_transport_slot(main: Node) -> void:
 	var scene: Control = _company_scene(main)
@@ -27,10 +29,9 @@ func _ensure_transport_slot(main: Node) -> void:
 	if existing != null:
 		if existing is Button:
 			transport_button = existing as Button
+			_refresh_transport_button(main)
 		return
 
-	var state: Dictionary = _state(main)
-	var tool: String = str(state.get("transport_tool", ""))
 	var button: Button = Button.new()
 	button.name = "TransportSlot"
 	button.position = Vector2(360, 105)
@@ -39,22 +40,37 @@ func _ensure_transport_slot(main: Node) -> void:
 	button.add_theme_font_size_override("font_size", 13)
 	button.add_theme_stylebox_override("normal", _style(main, "#171411cc", "#9b7447", 10, 2))
 	button.add_theme_stylebox_override("hover", _style(main, "#241c15e8", "#d09b57", 10, 2))
+	button.pressed.connect(_show_transport_panel)
+	scene.add_child(button)
+	transport_button = button
+	_refresh_transport_button(main)
 
+func _refresh_transport_button(main: Node) -> void:
+	if not is_instance_valid(transport_button) or transport_running:
+		return
+	var state: Dictionary = _state(main)
+	var tool: String = str(state.get("transport_tool", ""))
 	if tool == "wheelbarrow" and _owned_transport("wheelbarrow") > 0:
-		button.text = "KOLEČKO\n0,1 m³ • 5 s\nKLIKNI PRO ODVOZ"
+		var contracts: Node = get_node_or_null("/root/ContractManager")
+		var has_contract: bool = contracts != null and bool(contracts.call("has_active_contract"))
+		if has_contract:
+			if float(state.get("split_m3", 0.0)) + 0.0001 < TRANSPORT_AMOUNT_M3:
+				transport_button.text = "KOLEČKO\nČEKÁ NA DŘEVO\n0,1 m³ / odvoz"
+			elif float(state.get("money", 0.0)) < TRANSPORT_WAGE:
+				transport_button.text = "KOLEČKO\nČEKÁ NA 5 Kč\nZA ODVOZ"
+			else:
+				transport_button.text = "KOLEČKO\nAUTOMATICKÝ ODVOZ\n0,1 m³ • 5 s"
+		else:
+			transport_button.text = "KOLEČKO\nČEKÁ NA ZAKÁZKU\n0,1 m³ • 5 s"
 		var asset_path: String = "res://assets/tools/wheelbarrow.png"
 		if ResourceLoader.exists(asset_path):
 			var resource: Resource = ResourceLoader.load(asset_path)
 			if resource is Texture2D:
-				button.icon = resource as Texture2D
-				button.expand_icon = true
-		button.pressed.connect(_start_transport)
+				transport_button.icon = resource as Texture2D
+				transport_button.expand_icon = true
 	else:
-		button.text = "+\nDOPRAVA\nVYBRAT PROSTŘEDEK"
-		button.pressed.connect(_show_transport_panel)
-
-	scene.add_child(button)
-	transport_button = button
+		transport_button.icon = null
+		transport_button.text = "+\nDOPRAVA\nVYBRAT PROSTŘEDEK"
 
 func _show_transport_panel() -> void:
 	var main: Node = get_tree().current_scene
@@ -65,7 +81,7 @@ func _show_transport_panel() -> void:
 	dialog.title = "Doprava – nastavení"
 	dialog.ok_button_text = "ZAVŘÍT"
 	var box: VBoxContainer = VBoxContainer.new()
-	box.custom_minimum_size = Vector2(400, 180)
+	box.custom_minimum_size = Vector2(400, 190)
 	box.add_theme_constant_override("separation", 10)
 	dialog.add_child(box)
 	box.add_child(_label(main, "DOPRAVNÍ PROSTŘEDEK", 15))
@@ -82,9 +98,9 @@ func _show_transport_panel() -> void:
 	_select_tool(tools, str(state.get("transport_tool", "")))
 	tools.item_selected.connect(_on_transport_selected.bind(tools, dialog))
 	box.add_child(tools)
-	box.add_child(_label(main, "Odvoz stojí 5 Kč a veze 0,1 m³ štípaného dřeva.", 13))
+	box.add_child(_label(main, "Po přijetí zakázky vozí samo. Každý odvoz stojí 5 Kč.", 13))
 	main.add_child(dialog)
-	dialog.popup_centered(Vector2i(450, 240))
+	dialog.popup_centered(Vector2i(460, 250))
 
 func _on_transport_selected(index: int, tools: OptionButton, dialog: AcceptDialog) -> void:
 	var main: Node = get_tree().current_scene
@@ -99,21 +115,18 @@ func _on_transport_selected(index: int, tools: OptionButton, dialog: AcceptDialo
 		dialog.queue_free()
 	_remove_slot(main)
 
-func _start_transport() -> void:
-	if transport_running:
-		return
-	var main: Node = get_tree().current_scene
-	if main == null:
-		return
+func _try_auto_start(main: Node) -> void:
 	var state: Dictionary = _state(main)
-	if str(state.get("transport_tool", "")) != "wheelbarrow" or _owned_transport("wheelbarrow") <= 0:
-		_remove_slot(main)
+	if str(state.get("transport_tool", "")) != "wheelbarrow":
+		return
+	if _owned_transport("wheelbarrow") <= 0:
+		return
+	var contracts: Node = get_node_or_null("/root/ContractManager")
+	if contracts == null or not bool(contracts.call("can_accept_delivery", TRANSPORT_AMOUNT_M3)):
 		return
 	if float(state.get("split_m3", 0.0)) + 0.0001 < TRANSPORT_AMOUNT_M3:
-		_set_button_message("NEMÁŠ 0,1 m³\nŠTÍPANÉHO DŘEVA")
 		return
 	if float(state.get("money", 0.0)) < TRANSPORT_WAGE:
-		_set_button_message("CHYBÍ 5 Kč\nNA ODVOZ")
 		return
 	transport_running = true
 	transport_elapsed = 0.0
@@ -125,25 +138,30 @@ func _process_transport(main: Node, delta: float) -> void:
 		return
 	transport_elapsed += delta
 	if is_instance_valid(transport_button):
-		transport_button.text = "ODVÁŽÍM...\n%.1f s" % maxf(0.0, WHEELBARROW_TIME - transport_elapsed)
+		transport_button.text = "ODVÁŽÍM NA ZAKÁZKU...\n%.1f s" % maxf(0.0, WHEELBARROW_TIME - transport_elapsed)
 	if transport_elapsed < WHEELBARROW_TIME:
 		return
 
 	transport_running = false
 	transport_elapsed = 0.0
+	var contracts: Node = get_node_or_null("/root/ContractManager")
 	var state: Dictionary = _state(main)
-	if float(state.get("split_m3", 0.0)) + 0.0001 >= TRANSPORT_AMOUNT_M3 and float(state.get("money", 0.0)) >= TRANSPORT_WAGE:
+	var can_deliver: bool = contracts != null and bool(contracts.call("can_accept_delivery", TRANSPORT_AMOUNT_M3))
+	if can_deliver and float(state.get("split_m3", 0.0)) + 0.0001 >= TRANSPORT_AMOUNT_M3 and float(state.get("money", 0.0)) >= TRANSPORT_WAGE:
 		state["split_m3"] = maxf(0.0, float(state.get("split_m3", 0.0)) - TRANSPORT_AMOUNT_M3)
 		state["money"] = float(state.get("money", 0.0)) - TRANSPORT_WAGE
-		state["delivered_m3"] = float(state.get("delivered_m3", 0.0)) + TRANSPORT_AMOUNT_M3
 		main.set("state", state)
+		var result: Dictionary = contracts.call("register_delivery", main, TRANSPORT_AMOUNT_M3) as Dictionary
 		if main.has_method("update_hud"):
 			main.call("update_hud")
 		if main.has_method("save_game"):
 			main.call("save_game")
-		_set_button_message("ODVEZENO 0,1 m³\nKLIKNI PRO DALŠÍ")
+		if bool(result.get("completed", false)):
+			_set_button_message("ZAKÁZKA HOTOVÁ\n+%.0f Kč" % float(result.get("payout", 0.0)))
+		else:
+			_set_button_message("ODVEZENO 0,1 m³\nPOKRAČUJU AUTOMATICKY")
 	else:
-		_set_button_message("ODVOZ SE NEPOVEDL")
+		_set_button_message("ODVOZ ČEKÁ")
 	if is_instance_valid(transport_button):
 		transport_button.disabled = false
 
