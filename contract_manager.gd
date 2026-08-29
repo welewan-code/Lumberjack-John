@@ -7,6 +7,7 @@ const ACTIVE_LIFETIME: int = 300
 const DELIVERY_STEP_M3: float = 0.1
 const DELIVERY_WAGE: float = 5.0
 const DELIVERY_SECONDS: int = 5
+const XP_PER_DELIVERY_STEP: int = 3
 
 var current_offer: Dictionary = {}
 var active_contracts: Array[Dictionary] = []
@@ -122,7 +123,7 @@ func _apply_offline_transport(main: Node, last_seen: int, now: int) -> void:
 		if float(target.get("delivered_m3", 0.0)) + 0.0001 >= volume:
 			var payout: float = volume * float(target.get("price_per_m3", 0.0))
 			state["money"] = float(state.get("money", 0.0)) + payout
-			state["xp"] = int(state.get("xp", 0)) + int(round(volume * 10.0))
+			state["xp"] = int(state.get("xp", 0)) + _contract_xp(volume)
 			active_contracts.remove_at(target_index)
 
 	if changed:
@@ -173,7 +174,7 @@ func register_delivery(main: Node, amount: float = DELIVERY_STEP_M3) -> Dictiona
 			payout = volume * float(contract.get("price_per_m3", 0.0))
 			var state: Dictionary = _main_state(main)
 			state["money"] = float(state.get("money", 0.0)) + payout
-			state["xp"] = int(state.get("xp", 0)) + int(round(volume * 10.0))
+			state["xp"] = int(state.get("xp", 0)) + _contract_xp(volume)
 			main.set("state", state)
 			active_contracts.remove_at(index)
 			if main.has_method("update_hud"):
@@ -184,6 +185,9 @@ func register_delivery(main: Node, amount: float = DELIVERY_STEP_M3) -> Dictiona
 		ui_signature = ""
 		return {"ok": true, "completed": completed, "payout": payout, "volume_m3": volume}
 	return {"ok": false, "completed": false, "payout": 0.0}
+
+func _contract_xp(volume: float) -> int:
+	return int(round(volume / DELIVERY_STEP_M3)) * XP_PER_DELIVERY_STEP
 
 func _generate_offer(now: int) -> void:
 	var volume: float = float(randi_range(1, 5)) / 10.0
