@@ -14,7 +14,7 @@ func _process(_delta: float) -> void:
 			var button := node as Button
 			if button.text in ["FIRMA", "PRÁCE", "OBCHOD", "SKLAD", "STATISTIKY", "ÚSPĚCHY", "NASTAVENÍ"]:
 				button.mouse_filter = Control.MOUSE_FILTER_STOP
-				button.z_index = 10000
+				button.z_index = 100
 				var key := button.get_instance_id()
 				if not connected_buttons.has(key):
 					connected_buttons[key] = true
