@@ -119,6 +119,9 @@ func _do_sawyer_cycle(state: Dictionary) -> bool:
 		return false
 	if float(state.get("logs_m3", 0.0)) + 0.0001 < SAW_IN_M3:
 		return false
+	var net_growth: float = SAW_OUT_M3 - SAW_IN_M3
+	if _storage_used(state) + net_growth > STORAGE_CAPACITY + 0.0001:
+		return false
 	state["money"] = float(state.get("money", 0.0)) - SAWYER_WAGE
 	state["logs_m3"] = maxf(0.0, float(state.get("logs_m3", 0.0)) - SAW_IN_M3)
 	state["roundwood_m3"] = float(state.get("roundwood_m3", 0.0)) + SAW_OUT_M3
