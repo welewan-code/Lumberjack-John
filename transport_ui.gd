@@ -1,5 +1,6 @@
 extends Node
 
+const TRANSPORT_SAVE_PATH: String = "user://transport_state.json"
 const TRANSPORT_AMOUNT_M3: float = 0.1
 const TRANSPORT_WAGE: float = 5.0
 const WHEELBARROW_TIME: float = 5.0
@@ -9,15 +10,17 @@ var transport_running: bool = false
 var transport_elapsed: float = 0.0
 var transport_button: Button = null
 var ui_refresh_elapsed: float = 0.0
+var saved_transport_tool: String = ""
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_load_transport_state()
 
 func _process(delta: float) -> void:
 	var main: Node = get_tree().current_scene
 	if main == null:
 		return
-
+	_restore_saved_tool(main)
 	_process_transport(main, delta)
 
 	ui_refresh_elapsed += delta
@@ -29,6 +32,23 @@ func _process(delta: float) -> void:
 		_ensure_transport_slot(main)
 	if not transport_running:
 		_try_auto_start(main)
+
+func get_selected_transport_tool(main: Node = null) -> String:
+	if main != null:
+		var state: Dictionary = _state(main)
+		var state_tool: String = str(state.get("transport_tool", ""))
+		if state_tool != "":
+			return state_tool
+	return saved_transport_tool
+
+func _restore_saved_tool(main: Node) -> void:
+	if saved_transport_tool == "":
+		return
+	var state: Dictionary = _state(main)
+	if str(state.get("transport_tool", "")) == saved_transport_tool:
+		return
+	state["transport_tool"] = saved_transport_tool
+	main.set("state", state)
 
 func _ensure_transport_slot(main: Node) -> void:
 	var scene: Control = _company_scene(main)
@@ -58,7 +78,7 @@ func _refresh_transport_button(main: Node) -> void:
 	if not is_instance_valid(transport_button) or transport_running:
 		return
 	var state: Dictionary = _state(main)
-	var tool: String = str(state.get("transport_tool", ""))
+	var tool: String = get_selected_transport_tool(main)
 	if tool == "wheelbarrow" and _owned_transport("wheelbarrow") > 0:
 		var has_contract: bool = _contract_bool("has_active_contract")
 		if has_contract:
@@ -85,7 +105,6 @@ func _show_transport_panel() -> void:
 	var main: Node = get_tree().current_scene
 	if main == null:
 		return
-	var state: Dictionary = _state(main)
 	var dialog: AcceptDialog = AcceptDialog.new()
 	dialog.title = "Doprava – nastavení"
 	dialog.ok_button_text = "ZAVŘÍT"
@@ -104,7 +123,7 @@ func _show_transport_panel() -> void:
 		tools.set_item_metadata(tools.item_count - 1, "wheelbarrow")
 	else:
 		box.add_child(_label(main, "Kolečko nejdřív kup v obchodě.", 13))
-	_select_tool(tools, str(state.get("transport_tool", "")))
+	_select_tool(tools, get_selected_transport_tool(main))
 	tools.item_selected.connect(_on_transport_selected.bind(tools, dialog))
 	box.add_child(tools)
 	box.add_child(_label(main, "Po přijetí zakázky vozí samo. Každý odvoz stojí 5 Kč.", 13))
@@ -116,8 +135,10 @@ func _on_transport_selected(index: int, tools: OptionButton, dialog: AcceptDialo
 	if main == null:
 		return
 	var state: Dictionary = _state(main)
-	state["transport_tool"] = str(tools.get_item_metadata(index))
+	saved_transport_tool = str(tools.get_item_metadata(index))
+	state["transport_tool"] = saved_transport_tool
 	main.set("state", state)
+	_save_transport_state()
 	if main.has_method("save_game"):
 		main.call("save_game")
 	if is_instance_valid(dialog):
@@ -126,7 +147,7 @@ func _on_transport_selected(index: int, tools: OptionButton, dialog: AcceptDialo
 
 func _try_auto_start(main: Node) -> void:
 	var state: Dictionary = _state(main)
-	if str(state.get("transport_tool", "")) != "wheelbarrow":
+	if get_selected_transport_tool(main) != "wheelbarrow":
 		return
 	if _owned_transport("wheelbarrow") <= 0:
 		return
@@ -246,6 +267,21 @@ func _state(main: Node) -> Dictionary:
 	if value is Dictionary:
 		return value as Dictionary
 	return {}
+
+func _save_transport_state() -> void:
+	var file: FileAccess = FileAccess.open(TRANSPORT_SAVE_PATH, FileAccess.WRITE)
+	if file != null:
+		file.store_string(JSON.stringify({"transport_tool": saved_transport_tool}))
+
+func _load_transport_state() -> void:
+	if not FileAccess.file_exists(TRANSPORT_SAVE_PATH):
+		return
+	var file: FileAccess = FileAccess.open(TRANSPORT_SAVE_PATH, FileAccess.READ)
+	if file == null:
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	if parsed is Dictionary:
+		saved_transport_tool = str((parsed as Dictionary).get("transport_tool", ""))
 
 func _label(main: Node, text_value: String, size: int) -> Label:
 	var value: Variant = main.call("make_label", text_value, size)
