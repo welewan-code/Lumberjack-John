@@ -3,10 +3,12 @@ extends Node
 const TRANSPORT_AMOUNT_M3: float = 0.1
 const TRANSPORT_WAGE: float = 5.0
 const WHEELBARROW_TIME: float = 5.0
+const UI_REFRESH_INTERVAL: float = 0.25
 
 var transport_running: bool = false
 var transport_elapsed: float = 0.0
 var transport_button: Button = null
+var ui_refresh_elapsed: float = 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -15,9 +17,16 @@ func _process(delta: float) -> void:
 	var main: Node = get_tree().current_scene
 	if main == null:
 		return
+
+	_process_transport(main, delta)
+
+	ui_refresh_elapsed += delta
+	if ui_refresh_elapsed < UI_REFRESH_INTERVAL:
+		return
+	ui_refresh_elapsed = 0.0
+
 	if str(main.get("current_tab")) == "FIRMA":
 		_ensure_transport_slot(main)
-	_process_transport(main, delta)
 	if not transport_running:
 		_try_auto_start(main)
 
@@ -51,8 +60,7 @@ func _refresh_transport_button(main: Node) -> void:
 	var state: Dictionary = _state(main)
 	var tool: String = str(state.get("transport_tool", ""))
 	if tool == "wheelbarrow" and _owned_transport("wheelbarrow") > 0:
-		var contracts: Node = get_node_or_null("/root/ContractManager")
-		var has_contract: bool = contracts != null and bool(contracts.call("has_active_contract"))
+		var has_contract: bool = _contract_bool("has_active_contract")
 		if has_contract:
 			if float(state.get("split_m3", 0.0)) + 0.0001 < TRANSPORT_AMOUNT_M3:
 				transport_button.text = "KOLEČKO\nČEKÁ NA DŘEVO\n0,1 m³ / odvoz"
@@ -62,12 +70,13 @@ func _refresh_transport_button(main: Node) -> void:
 				transport_button.text = "KOLEČKO\nAUTOMATICKÝ ODVOZ\n0,1 m³ • 5 s"
 		else:
 			transport_button.text = "KOLEČKO\nČEKÁ NA ZAKÁZKU\n0,1 m³ • 5 s"
-		var asset_path: String = "res://assets/tools/wheelbarrow.png"
-		if ResourceLoader.exists(asset_path):
-			var resource: Resource = ResourceLoader.load(asset_path)
-			if resource is Texture2D:
-				transport_button.icon = resource as Texture2D
-				transport_button.expand_icon = true
+		if transport_button.icon == null:
+			var asset_path: String = "res://assets/tools/wheelbarrow.png"
+			if ResourceLoader.exists(asset_path):
+				var resource: Resource = ResourceLoader.load(asset_path)
+				if resource is Texture2D:
+					transport_button.icon = resource as Texture2D
+					transport_button.expand_icon = true
 	else:
 		transport_button.icon = null
 		transport_button.text = "+\nDOPRAVA\nVYBRAT PROSTŘEDEK"
@@ -121,8 +130,7 @@ func _try_auto_start(main: Node) -> void:
 		return
 	if _owned_transport("wheelbarrow") <= 0:
 		return
-	var contracts: Node = get_node_or_null("/root/ContractManager")
-	if contracts == null or not bool(contracts.call("can_accept_delivery", TRANSPORT_AMOUNT_M3)):
+	if not _contract_bool("can_accept_delivery", [TRANSPORT_AMOUNT_M3]):
 		return
 	if float(state.get("split_m3", 0.0)) + 0.0001 < TRANSPORT_AMOUNT_M3:
 		return
@@ -144,14 +152,13 @@ func _process_transport(main: Node, delta: float) -> void:
 
 	transport_running = false
 	transport_elapsed = 0.0
-	var contracts: Node = get_node_or_null("/root/ContractManager")
 	var state: Dictionary = _state(main)
-	var can_deliver: bool = contracts != null and bool(contracts.call("can_accept_delivery", TRANSPORT_AMOUNT_M3))
+	var can_deliver: bool = _contract_bool("can_accept_delivery", [TRANSPORT_AMOUNT_M3])
 	if can_deliver and float(state.get("split_m3", 0.0)) + 0.0001 >= TRANSPORT_AMOUNT_M3 and float(state.get("money", 0.0)) >= TRANSPORT_WAGE:
 		state["split_m3"] = maxf(0.0, float(state.get("split_m3", 0.0)) - TRANSPORT_AMOUNT_M3)
 		state["money"] = float(state.get("money", 0.0)) - TRANSPORT_WAGE
 		main.set("state", state)
-		var result: Dictionary = contracts.call("register_delivery", main, TRANSPORT_AMOUNT_M3) as Dictionary
+		var result: Dictionary = _register_delivery(main, TRANSPORT_AMOUNT_M3)
 		if main.has_method("update_hud"):
 			main.call("update_hud")
 		if main.has_method("save_game"):
@@ -164,6 +171,28 @@ func _process_transport(main: Node, delta: float) -> void:
 		_set_button_message("ODVOZ ČEKÁ")
 	if is_instance_valid(transport_button):
 		transport_button.disabled = false
+
+func _contract_bool(method_name: String, args: Array = []) -> bool:
+	var contracts: Node = get_node_or_null("/root/ContractManager")
+	if contracts == null or not contracts.has_method(method_name):
+		return false
+	var value: Variant
+	if args.is_empty():
+		value = contracts.call(method_name)
+	else:
+		value = contracts.callv(method_name, args)
+	if value is bool:
+		return value as bool
+	return false
+
+func _register_delivery(main: Node, amount: float) -> Dictionary:
+	var contracts: Node = get_node_or_null("/root/ContractManager")
+	if contracts == null or not contracts.has_method("register_delivery"):
+		return {"ok": false, "completed": false, "payout": 0.0}
+	var value: Variant = contracts.call("register_delivery", main, amount)
+	if value is Dictionary:
+		return value as Dictionary
+	return {"ok": false, "completed": false, "payout": 0.0}
 
 func _set_button_message(value: String) -> void:
 	if is_instance_valid(transport_button):
