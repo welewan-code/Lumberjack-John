@@ -11,8 +11,8 @@ const CHOP_OUT_M3: float = 0.015
 const STORAGE_CAPACITY: float = 10.0
 const SPLITTER_TIME_WOODEN: float = 1.8
 const SPLITTER_TIME_SHARPENED: float = 1.6
-const SAWYER_TIME_FRAME: float = 3.0
-const SAWYER_TIME_AKU: float = 1.5
+const SAWYER_TIME_FRAME: float = 20.0
+const SAWYER_TIME_AKU: float = 14.0
 
 var heartbeat: float = 0.0
 
