@@ -28,6 +28,7 @@ var content_host: MarginContainer
 var left_panel: PanelContainer
 var right_panel: PanelContainer
 var money_label: Label
+var logs_label: Label
 var roundwood_label: Label
 var split_label: Label
 var role_label: Label
@@ -107,11 +108,14 @@ func build_top(parent: VBoxContainer) -> void:
 	var m2 := MarginContainer.new(); m2.add_theme_constant_override("margin_left",18); m2.add_theme_constant_override("margin_top",14); p2.add_child(m2)
 	money_label=make_label("0 Kč",27); money_label.add_theme_color_override("font_color",Color("#ffca42")); m2.add_child(money_label)
 	var p3 := PanelContainer.new(); p3.size_flags_horizontal=Control.SIZE_EXPAND_FILL; p3.add_theme_stylebox_override("panel",panel_style("#1d1712")); top.add_child(p3)
-	var m3 := MarginContainer.new(); m3.add_theme_constant_override("margin_left",18); m3.add_theme_constant_override("margin_top",14); p3.add_child(m3)
-	roundwood_label=make_label("0.000 m³\nKulatina",18); m3.add_child(roundwood_label)
+	var m3 := MarginContainer.new(); m3.add_theme_constant_override("margin_left",14); m3.add_theme_constant_override("margin_top",14); p3.add_child(m3)
+	logs_label=make_label("0.000 m³\nKulatina",17); m3.add_child(logs_label)
 	var p4 := PanelContainer.new(); p4.size_flags_horizontal=Control.SIZE_EXPAND_FILL; p4.add_theme_stylebox_override("panel",panel_style("#1d1712")); top.add_child(p4)
-	var m4 := MarginContainer.new(); m4.add_theme_constant_override("margin_left",18); m4.add_theme_constant_override("margin_top",14); p4.add_child(m4)
-	split_label=make_label("0.000 m³\nŠtípané dřevo",18); m4.add_child(split_label)
+	var m4 := MarginContainer.new(); m4.add_theme_constant_override("margin_left",14); m4.add_theme_constant_override("margin_top",14); p4.add_child(m4)
+	roundwood_label=make_label("0.000 m³\nŠpalky",17); m4.add_child(roundwood_label)
+	var p5 := PanelContainer.new(); p5.size_flags_horizontal=Control.SIZE_EXPAND_FILL; p5.add_theme_stylebox_override("panel",panel_style("#1d1712")); top.add_child(p5)
+	var m5 := MarginContainer.new(); m5.add_theme_constant_override("margin_left",14); m5.add_theme_constant_override("margin_top",14); p5.add_child(m5)
+	split_label=make_label("0.000 m³\nŠtípané dřevo",17); m5.add_child(split_label)
 
 func build_left(parent: HBoxContainer) -> void:
 	left_panel=PanelContainer.new(); left_panel.custom_minimum_size.x=274; left_panel.add_theme_stylebox_override("panel",panel_style("#1b1713")); parent.add_child(left_panel)
@@ -266,7 +270,8 @@ func _process(delta:float) -> void:
 
 func update_hud() -> void:
 	if is_instance_valid(money_label): money_label.text="%.0f Kč\nPeníze" % float(state["money"])
-	if is_instance_valid(roundwood_label): roundwood_label.text="%.3f m³\nKulatina" % float(state["roundwood_m3"])
+	if is_instance_valid(logs_label): logs_label.text="%.3f m³\nKulatina" % float(state["logs_m3"])
+	if is_instance_valid(roundwood_label): roundwood_label.text="%.3f m³\nŠpalky" % float(state["roundwood_m3"])
 	if is_instance_valid(split_label): split_label.text="%.3f m³\nŠtípané dřevo" % float(state["split_m3"])
 	if is_instance_valid(role_label): role_label.text="Pomocník ve dřevárně"
 	if is_instance_valid(xp_label): xp_label.text="%d XP" % int(state["xp"])
