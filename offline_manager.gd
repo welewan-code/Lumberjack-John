@@ -105,9 +105,8 @@ func _apply_offline_progress() -> void:
 		if result == CYCLE_SUCCESS:
 			changed = true
 		elif result == CYCLE_STORAGE_FULL:
-			for i in range(SLOT_COUNT):
-				next_events[i] = SENTINEL
-			break
+			# Sklad se offline nemůže uvolnit, ale menší čistý přírůstek jiného nástroje se ještě může vejít.
+			next_events[slot_index] = SENTINEL
 		elif result == CYCLE_NO_MONEY or result == CYCLE_INVALID:
 			next_events[slot_index] = SENTINEL
 		elif result == CYCLE_NO_INPUT:
