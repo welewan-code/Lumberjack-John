@@ -33,11 +33,9 @@ func _ready() -> void:
 
 func _render_shop() -> void:
 	var main := get_tree().current_scene
-	if main == null:
-		return
+	if main == null: return
 	var host_value = main.get("content_host")
-	if not (host_value is MarginContainer):
-		return
+	if not (host_value is MarginContainer): return
 	var host := host_value as MarginContainer
 	for child in host.get_children(): child.queue_free()
 	await get_tree().process_frame
@@ -90,9 +88,12 @@ func _add_item_card(main:Node,grid:GridContainer,item_id:String,item:Dictionary)
 	var row:=HBoxContainer.new(); row.add_theme_constant_override("separation",12); margin.add_child(row)
 	var asset_path:String=str(item.get("asset",""))
 	if asset_path!="" and ResourceLoader.exists(asset_path):
-		var tex:=TextureRect.new(); tex.custom_minimum_size=Vector2(120,120); tex.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; tex.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED; var res:=ResourceLoader.load(asset_path)
-		if res is Texture2D: tex.texture=res as Texture2D
-		row.add_child(tex)
+		if item_id=="checht_axe":
+			_add_checht_preview(row,asset_path)
+		else:
+			var tex:=TextureRect.new(); tex.custom_minimum_size=Vector2(120,120); tex.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; tex.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED; var res:=ResourceLoader.load(asset_path)
+			if res is Texture2D: tex.texture=res as Texture2D
+			row.add_child(tex)
 	var info:=VBoxContainer.new(); info.size_flags_horizontal=Control.SIZE_EXPAND_FILL; info.add_theme_constant_override("separation",5); row.add_child(info)
 	var name_label:=_make_label(main,str(item["name"]),20); name_label.add_theme_color_override("font_color",Color("#ffca42")); info.add_child(name_label); info.add_child(_make_label(main,str(item["desc"]),14))
 	var price:int=int(item["price"]); var owned:int=_owned_count(main,item_id); var price_text:="Startovní výbava" if price<=0 else "%d Kč"%price; info.add_child(_make_label(main,"Cena: %s  •  Vlastníš: %d"%[price_text,owned],14))
@@ -102,6 +103,20 @@ func _add_item_card(main:Node,grid:GridContainer,item_id:String,item:Dictionary)
 	elif item_id=="checht_axe" and owned>0: action.text="VYBAVIT"; action.pressed.connect(_equip_axe.bind("checht"))
 	else: action.text="KOUPIT ZA %d Kč"%price; action.disabled=float(_main_state(main).get("money",0.0))<float(price); action.pressed.connect(_buy_item.bind(item_id))
 	info.add_child(action)
+
+func _add_checht_preview(row: HBoxContainer, asset_path: String) -> void:
+	var holder:=Control.new(); holder.custom_minimum_size=Vector2(120,120); row.add_child(holder)
+	var source:=ResourceLoader.load(asset_path)
+	if not (source is Texture2D): return
+	var source_tex:=source as Texture2D
+	var atlas:=AtlasTexture.new(); atlas.atlas=source_tex
+	var w:float=float(source_tex.get_width()); var h:float=float(source_tex.get_height())
+	# Zdroj obsahuje čtyři varianty pod sebou. Používáme pouze druhou červenou sekeru.
+	atlas.region=Rect2(0.0,h*0.25,w,h*0.25)
+	var tex:=TextureRect.new(); tex.texture=atlas; tex.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; tex.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	# Stejný optický box jako ostatní sekery; náklon odpovídá základní sekeře.
+	tex.position=Vector2(15,15); tex.size=Vector2(90,90); tex.pivot_offset=Vector2(45,45); tex.rotation_degrees=-42.0
+	holder.add_child(tex)
 
 func _buy_item(item_id:String)->void:
 	if not ITEMS.has(item_id):return
