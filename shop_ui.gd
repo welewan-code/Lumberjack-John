@@ -17,6 +17,7 @@ const ITEMS: Dictionary = {
 }
 
 var current_category: String = "SEKERY"
+var category_refresh_id: int = 0
 var inventory: Dictionary = {
 	"sharpened_axe": 0,
 	"frame_saw": 0,
@@ -262,6 +263,8 @@ func _equip_axe(axe_id: String) -> void:
 	_refresh_category()
 
 func _refresh_category() -> void:
+	category_refresh_id += 1
+	var request_id: int = category_refresh_id
 	var main := get_tree().current_scene
 	if main == null:
 		return
@@ -270,6 +273,8 @@ func _refresh_category() -> void:
 		for child in host.get_children():
 			child.queue_free()
 		await get_tree().process_frame
+		if request_id != category_refresh_id:
+			return
 		if is_instance_valid(host):
 			_render_category(main, host as VBoxContainer)
 
