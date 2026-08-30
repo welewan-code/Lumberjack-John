@@ -12,8 +12,17 @@ const CHOP_OUT_M3: float = 0.015
 const STORAGE_CAPACITY: float = 10.0
 const SPLITTER_TIME_WOODEN: float = 1.8
 const SPLITTER_TIME_SHARPENED: float = 1.6
+const SPLITTER_TIME_CHECHT: float = 1.5
 const SAWYER_TIME_FRAME: float = 20.0
 const SAWYER_TIME_AKU: float = 14.0
+const SLOT_COUNT: int = 3
+const SENTINEL: float = 1.0e30
+
+const CYCLE_SUCCESS: int = 0
+const CYCLE_NO_MONEY: int = 1
+const CYCLE_NO_INPUT: int = 2
+const CYCLE_STORAGE_FULL: int = 3
+const CYCLE_INVALID: int = 4
 
 var heartbeat: float = 0.0
 
@@ -45,65 +54,72 @@ func _apply_offline_progress() -> void:
 		_write_last_seen()
 		return
 
+	var company: Node = get_node_or_null("/root/CompanyUI")
+	if company != null and company.has_method("validate_work_slots"):
+		company.call("validate_work_slots", game, true)
+
 	var state_value: Variant = game.get("state")
 	if not (state_value is Dictionary):
 		_write_last_seen()
 		return
 	var state: Dictionary = state_value as Dictionary
+	var slots: Array = _work_slots(state)
 
-	var splitter_tool: String = str(state.get("splitter_tool", ""))
-	var sawyer_tool: String = str(state.get("sawyer_tool", ""))
-	var splitter_enabled: bool = bool(state.get("splitter_hired", false)) and bool(state.get("splitter_active", true))
-	var sawyer_enabled: bool = bool(state.get("sawyer_hired", false)) and bool(state.get("sawyer_active", true))
+	var tools: Array[String] = ["", "", ""]
+	var cycles: Array[float] = [0.0, 0.0, 0.0]
+	var next_events: Array[float] = [SENTINEL, SENTINEL, SENTINEL]
+	var has_active_worker: bool = false
 
-	var split_cycle: float = 0.0
-	if splitter_enabled:
-		if splitter_tool == "sharpened":
-			split_cycle = SPLITTER_TIME_SHARPENED
-		elif splitter_tool == "wooden":
-			split_cycle = SPLITTER_TIME_WOODEN
+	for slot_index in range(SLOT_COUNT):
+		var slot: Dictionary = slots[slot_index] as Dictionary
+		if str(slot.get("mode", "player")) != "employee" or not bool(slot.get("active", false)):
+			continue
+		var tool_id: String = str(slot.get("tool", ""))
+		var cycle_time: float = _tool_cycle_time(tool_id)
+		if cycle_time <= 0.0:
+			continue
+		tools[slot_index] = tool_id
+		cycles[slot_index] = cycle_time
+		next_events[slot_index] = cycle_time
+		has_active_worker = true
 
-	var saw_cycle: float = 0.0
-	if sawyer_enabled:
-		if sawyer_tool == "frame_saw":
-			saw_cycle = SAWYER_TIME_FRAME
-		elif sawyer_tool == "aku_saw":
-			saw_cycle = SAWYER_TIME_AKU
-
-	if split_cycle <= 0.0 and saw_cycle <= 0.0:
+	if not has_active_worker:
 		_write_last_seen()
 		return
 
-	var sentinel: float = 1.0e30
-	var next_split: float = split_cycle if split_cycle > 0.0 else sentinel
-	var next_saw: float = saw_cycle if saw_cycle > 0.0 else sentinel
-	var split_count: int = 0
-	var saw_count: int = 0
+	var changed: bool = false
 	var safety: int = 0
-
-	while safety < 20000:
+	while safety < 200000:
 		safety += 1
-		var next_event: float = minf(next_split, next_saw)
-		if next_event > float(elapsed):
+		var slot_index: int = _next_event_slot(next_events)
+		if slot_index < 0:
+			break
+		var event_time: float = next_events[slot_index]
+		if event_time > float(elapsed):
 			break
 
-		if next_saw <= next_split:
-			if _do_sawyer_cycle(state):
-				saw_count += 1
-				next_saw += saw_cycle
-			else:
-				next_saw = sentinel
-		else:
-			if _do_splitter_cycle(state):
-				split_count += 1
-				next_split += split_cycle
-			else:
-				next_split = sentinel
+		var tool_id: String = tools[slot_index]
+		var result: int = _try_tool_cycle(state, tool_id)
+		next_events[slot_index] += cycles[slot_index]
 
-		if next_split >= sentinel and next_saw >= sentinel:
+		if result == CYCLE_SUCCESS:
+			changed = true
+		elif result == CYCLE_STORAGE_FULL:
+			for i in range(SLOT_COUNT):
+				next_events[i] = SENTINEL
+			break
+		elif result == CYCLE_NO_MONEY or result == CYCLE_INVALID:
+			next_events[slot_index] = SENTINEL
+		elif result == CYCLE_NO_INPUT:
+			if _tool_role(tool_id) == "sawyer":
+				next_events[slot_index] = SENTINEL
+			elif not _has_future_saw_event(next_events, tools, float(elapsed)):
+				next_events[slot_index] = SENTINEL
+
+		if _next_event_slot(next_events) < 0:
 			break
 
-	if saw_count > 0 or split_count > 0:
+	if changed:
 		game.set("state", state)
 		if game.has_method("save_game"):
 			game.call("save_game")
@@ -114,31 +130,91 @@ func _apply_offline_progress() -> void:
 
 	_write_last_seen()
 
-func _do_sawyer_cycle(state: Dictionary) -> bool:
+func _next_event_slot(next_events: Array[float]) -> int:
+	var best_index: int = -1
+	var best_time: float = SENTINEL
+	for slot_index in range(SLOT_COUNT):
+		var event_time: float = next_events[slot_index]
+		if event_time < best_time:
+			best_time = event_time
+			best_index = slot_index
+	if best_time >= SENTINEL:
+		return -1
+	return best_index
+
+func _has_future_saw_event(next_events: Array[float], tools: Array[String], elapsed: float) -> bool:
+	for slot_index in range(SLOT_COUNT):
+		if _tool_role(tools[slot_index]) == "sawyer" and next_events[slot_index] <= elapsed:
+			return true
+	return false
+
+func _try_tool_cycle(state: Dictionary, tool_id: String) -> int:
+	var role: String = _tool_role(tool_id)
+	if role == "sawyer":
+		return _try_saw_cycle(state)
+	if role == "splitter":
+		return _try_split_cycle(state)
+	return CYCLE_INVALID
+
+func _try_saw_cycle(state: Dictionary) -> int:
 	if float(state.get("money", 0.0)) < SAWYER_WAGE:
-		return false
+		return CYCLE_NO_MONEY
 	if float(state.get("logs_m3", 0.0)) + 0.0001 < SAW_IN_M3:
-		return false
+		return CYCLE_NO_INPUT
 	var net_growth: float = SAW_OUT_M3 - SAW_IN_M3
 	if _storage_used(state) + net_growth > STORAGE_CAPACITY + 0.0001:
-		return false
+		return CYCLE_STORAGE_FULL
 	state["money"] = float(state.get("money", 0.0)) - SAWYER_WAGE
 	state["logs_m3"] = maxf(0.0, float(state.get("logs_m3", 0.0)) - SAW_IN_M3)
 	state["roundwood_m3"] = float(state.get("roundwood_m3", 0.0)) + SAW_OUT_M3
-	return true
+	return CYCLE_SUCCESS
 
-func _do_splitter_cycle(state: Dictionary) -> bool:
+func _try_split_cycle(state: Dictionary) -> int:
 	if float(state.get("money", 0.0)) < SPLITTER_WAGE:
-		return false
+		return CYCLE_NO_MONEY
 	if float(state.get("roundwood_m3", 0.0)) + 0.0001 < CHOP_IN_M3:
-		return false
+		return CYCLE_NO_INPUT
 	var net_growth: float = CHOP_OUT_M3 - CHOP_IN_M3
 	if _storage_used(state) + net_growth > STORAGE_CAPACITY + 0.0001:
-		return false
+		return CYCLE_STORAGE_FULL
 	state["money"] = float(state.get("money", 0.0)) - SPLITTER_WAGE
 	state["roundwood_m3"] = maxf(0.0, float(state.get("roundwood_m3", 0.0)) - CHOP_IN_M3)
 	state["split_m3"] = float(state.get("split_m3", 0.0)) + CHOP_OUT_M3
-	return true
+	return CYCLE_SUCCESS
+
+func _work_slots(state: Dictionary) -> Array:
+	var result: Array = []
+	var raw_value: Variant = state.get("work_slots", [])
+	var raw: Array = []
+	if raw_value is Array:
+		raw = raw_value as Array
+	for slot_index in range(SLOT_COUNT):
+		var mode: String = "player"
+		var tool_id: String = ""
+		var active: bool = false
+		if slot_index < raw.size() and raw[slot_index] is Dictionary:
+			var source: Dictionary = raw[slot_index] as Dictionary
+			mode = "employee" if str(source.get("mode", "player")) == "employee" else "player"
+			if mode == "employee":
+				tool_id = str(source.get("tool", ""))
+				active = bool(source.get("active", false))
+		result.append({"mode":mode, "tool":tool_id, "active":active})
+	return result
+
+func _tool_role(tool_id: String) -> String:
+	match tool_id:
+		"frame_saw", "aku_saw": return "sawyer"
+		"wooden_axe", "sharpened_axe", "checht_axe": return "splitter"
+		_: return ""
+
+func _tool_cycle_time(tool_id: String) -> float:
+	match tool_id:
+		"frame_saw": return SAWYER_TIME_FRAME
+		"aku_saw": return SAWYER_TIME_AKU
+		"wooden_axe": return SPLITTER_TIME_WOODEN
+		"sharpened_axe": return SPLITTER_TIME_SHARPENED
+		"checht_axe": return SPLITTER_TIME_CHECHT
+		_: return 0.0
 
 func _storage_used(state: Dictionary) -> float:
 	return float(state.get("logs_m3", 0.0)) + float(state.get("roundwood_m3", 0.0)) + float(state.get("split_m3", 0.0))
