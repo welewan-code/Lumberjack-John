@@ -83,7 +83,7 @@ func _storage_used(state:Dictionary)->float:
 	return float(state.get("logs_m3",0.0))+float(state.get("roundwood_m3",0.0))+float(state.get("split_m3",0.0))
 
 func _add_item_card(main:Node,grid:GridContainer,item_id:String,item:Dictionary)->void:
-	var panel:=PanelContainer.new(); panel.custom_minimum_size=Vector2(360,180); panel.size_flags_horizontal=Control.SIZE_EXPAND_FILL; panel.add_theme_stylebox_override("panel",_panel_style(main,"#1b1713","#6b4628",7,1)); grid.add_child(panel)
+	var panel:=PanelContainer.new(); panel.custom_minimum_size=Vector2(360,190); panel.size_flags_horizontal=Control.SIZE_EXPAND_FILL; panel.add_theme_stylebox_override("panel",_panel_style(main,"#1b1713","#6b4628",7,1)); grid.add_child(panel)
 	var margin:=MarginContainer.new(); margin.add_theme_constant_override("margin_left",14); margin.add_theme_constant_override("margin_right",14); margin.add_theme_constant_override("margin_top",12); margin.add_theme_constant_override("margin_bottom",12); panel.add_child(margin)
 	var row:=HBoxContainer.new(); row.add_theme_constant_override("separation",12); margin.add_child(row)
 	var asset_path:String=str(item.get("asset",""))
@@ -96,13 +96,22 @@ func _add_item_card(main:Node,grid:GridContainer,item_id:String,item:Dictionary)
 			row.add_child(tex)
 	var info:=VBoxContainer.new(); info.size_flags_horizontal=Control.SIZE_EXPAND_FILL; info.add_theme_constant_override("separation",5); row.add_child(info)
 	var name_label:=_make_label(main,str(item["name"]),20); name_label.add_theme_color_override("font_color",Color("#ffca42")); info.add_child(name_label); info.add_child(_make_label(main,str(item["desc"]),14))
-	var price:int=int(item["price"]); var owned:int=_owned_count(main,item_id); var price_text:="Startovní výbava" if price<=0 else "%d Kč"%price; info.add_child(_make_label(main,"Cena: %s  •  Vlastníš: %d"%[price_text,owned],14))
-	var action:=Button.new(); action.custom_minimum_size.y=36
-	if item_id=="wooden_axe": action.text="VYBAVIT"; action.pressed.connect(_equip_axe.bind("wooden"))
-	elif item_id=="sharpened_axe" and owned>0: action.text="VYBAVIT"; action.pressed.connect(_equip_axe.bind("sharpened"))
-	elif item_id=="checht_axe" and owned>0: action.text="VYBAVIT"; action.pressed.connect(_equip_axe.bind("checht"))
-	else: action.text="KOUPIT ZA %d Kč"%price; action.disabled=float(_main_state(main).get("money",0.0))<float(price); action.pressed.connect(_buy_item.bind(item_id))
-	info.add_child(action)
+	var price:int=int(item["price"]); var owned:int=get_owned_item_count(item_id); var price_text:="Startovní výbava" if price<=0 else "%d Kč"%price; info.add_child(_make_label(main,"Cena: %s  •  Vlastníš: %d"%[price_text,owned],14))
+	var actions:=HBoxContainer.new(); actions.add_theme_constant_override("separation",6); info.add_child(actions)
+	if item_id=="wooden_axe":
+		var equip_start:=Button.new(); equip_start.text="VYBAVIT"; equip_start.size_flags_horizontal=Control.SIZE_EXPAND_FILL; equip_start.custom_minimum_size.y=36; equip_start.pressed.connect(_equip_axe.bind("wooden")); actions.add_child(equip_start)
+	elif item_id=="sharpened_axe" or item_id=="checht_axe":
+		if owned>0:
+			var equip:=Button.new(); equip.text="VYBAVIT"; equip.size_flags_horizontal=Control.SIZE_EXPAND_FILL; equip.custom_minimum_size.y=36; equip.pressed.connect(_equip_axe.bind("sharpened" if item_id=="sharpened_axe" else "checht")); actions.add_child(equip)
+		_add_buy_button(main,actions,item_id,price,owned)
+	else:
+		_add_buy_button(main,actions,item_id,price,owned)
+
+func _add_buy_button(main:Node,actions:HBoxContainer,item_id:String,price:int,owned:int)->void:
+	var buy:=Button.new(); buy.size_flags_horizontal=Control.SIZE_EXPAND_FILL; buy.custom_minimum_size.y=36
+	buy.text=("KOUPIT DALŠÍ ZA %d Kč" if owned>0 else "KOUPIT ZA %d Kč") % price
+	buy.disabled=float(_main_state(main).get("money",0.0))<float(price)
+	buy.pressed.connect(_buy_item.bind(item_id)); actions.add_child(buy)
 
 func _add_checht_preview(row: HBoxContainer, asset_path: String) -> void:
 	var holder:=Control.new(); holder.custom_minimum_size=Vector2(120,120); row.add_child(holder)
@@ -111,10 +120,8 @@ func _add_checht_preview(row: HBoxContainer, asset_path: String) -> void:
 	var source_tex:=source as Texture2D
 	var atlas:=AtlasTexture.new(); atlas.atlas=source_tex
 	var w:float=float(source_tex.get_width()); var h:float=float(source_tex.get_height())
-	# Zdroj obsahuje čtyři varianty pod sebou. Používáme pouze druhou červenou sekeru.
 	atlas.region=Rect2(0.0,h*0.25,w,h*0.25)
 	var tex:=TextureRect.new(); tex.texture=atlas; tex.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; tex.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	# Stejný optický box jako ostatní sekery; náklon odpovídá základní sekeře.
 	tex.position=Vector2(15,15); tex.size=Vector2(90,90); tex.pivot_offset=Vector2(45,45); tex.rotation_degrees=-42.0
 	holder.add_child(tex)
 
@@ -125,17 +132,21 @@ func _buy_item(item_id:String)->void:
 	var item:Dictionary=ITEMS[item_id]; var price:int=int(item["price"]); var state:=_main_state(main)
 	if float(state.get("money",0.0))<float(price):return
 	state["money"]=float(state.get("money",0.0))-float(price)
-	if item_id=="sharpened_axe": state["sharpened_axe_qty"]=int(state.get("sharpened_axe_qty",0))+1
-	elif item_id=="checht_axe": state["checht_axe_qty"]=int(state.get("checht_axe_qty",0))+1
-	inventory[item_id]=int(inventory.get(item_id,0))+1; main.set("state",state); main.call("update_hud"); main.call("save_game"); save_inventory(); _refresh_category()
+	inventory[item_id]=int(inventory.get(item_id,0))+1
+	main.set("state",state); main.call("update_hud"); main.call("save_game"); save_inventory(); _refresh_category()
 
 func _equip_axe(axe_id:String)->void:
 	var main:=get_tree().current_scene
 	if main==null:return
-	var state:=_main_state(main)
-	if axe_id=="sharpened" and int(state.get("sharpened_axe_qty",0))<=0 and int(inventory.get("sharpened_axe",0))<=0:return
-	if axe_id=="checht" and int(state.get("checht_axe_qty",0))<=0 and int(inventory.get("checht_axe",0))<=0:return
-	state["equipped_axe"]=axe_id; main.set("state",state); main.call("save_game"); _refresh_category()
+	var required_item:String="wooden_axe"
+	if axe_id=="sharpened":required_item="sharpened_axe"
+	elif axe_id=="checht":required_item="checht_axe"
+	if get_owned_item_count(required_item)<=0:return
+	var state:=_main_state(main); state["equipped_axe"]=axe_id; main.set("state",state); main.call("save_game"); _refresh_category()
+
+func get_owned_item_count(item_id:String)->int:
+	if item_id=="wooden_axe":return 1
+	return maxi(0,int(inventory.get(item_id,0)))
 
 func _refresh_category()->void:
 	category_refresh_id+=1; var request_id:int=category_refresh_id; var main:=get_tree().current_scene
@@ -147,12 +158,8 @@ func _refresh_category()->void:
 		if request_id!=category_refresh_id:return
 		if is_instance_valid(host):_render_category(main,host as VBoxContainer)
 
-func _owned_count(main:Node,item_id:String)->int:
-	var state:=_main_state(main)
-	if item_id=="wooden_axe":return maxi(1,int(state.get("wooden_axe_qty",1)))
-	if item_id=="sharpened_axe":return maxi(int(state.get("sharpened_axe_qty",0)),int(inventory.get(item_id,0)))
-	if item_id=="checht_axe":return maxi(int(state.get("checht_axe_qty",0)),int(inventory.get(item_id,0)))
-	return int(inventory.get(item_id,0))
+func _owned_count(_main:Node,item_id:String)->int:
+	return get_owned_item_count(item_id)
 
 func _main_state(main:Node)->Dictionary:
 	var value=main.get("state"); return value as Dictionary if value is Dictionary else {}
@@ -182,4 +189,4 @@ func load_inventory()->void:
 	var parsed=JSON.parse_string(f.get_as_text())
 	if parsed is Dictionary:
 		for key in inventory.keys():
-			if parsed.has(key):inventory[key]=int(parsed[key])
+			if parsed.has(key):inventory[key]=maxi(0,int(parsed[key]))
