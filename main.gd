@@ -16,19 +16,16 @@ var state: Dictionary = {
 	"roundwood_m3": 0.0,
 	"split_m3": 0.0,
 	"wooden_axe_qty": 1,
-	"sharpened_axe_qty": 0,
-	"checht_axe_qty": 0,
 	"equipped_axe": "wooden",
 	"employed": true,
 	"current_job": "helper",
 	"work_clicks": 0,
 	"chop_seeded": false,
-	"sawyer_hired": false,
-	"splitter_hired": false,
-	"sawyer_active": true,
-	"splitter_active": true,
-	"sawyer_tool": "",
-	"splitter_tool": "wooden"
+	"work_slots": [
+		{"mode":"player", "tool":"", "active":false},
+		{"mode":"player", "tool":"", "active":false},
+		{"mode":"player", "tool":"", "active":false}
+	]
 }
 
 var current_tab: String = "PRÁCE"
@@ -288,15 +285,70 @@ func update_hud() -> void:
 	if is_instance_valid(role_label): role_label.text="Pomocník ve dřevárně"
 	if is_instance_valid(xp_label): xp_label.text="%d XP" % int(state["xp"])
 
+func _default_work_slots() -> Array:
+	return [
+		{"mode":"player", "tool":"", "active":false},
+		{"mode":"player", "tool":"", "active":false},
+		{"mode":"player", "tool":"", "active":false}
+	]
+
+func _migrate_legacy_work_slots(parsed: Dictionary) -> Array:
+	var slots: Array = _default_work_slots()
+	if bool(parsed.get("sawyer_hired", false)):
+		slots[0] = {
+			"mode":"employee",
+			"tool":str(parsed.get("sawyer_tool", "")),
+			"active":bool(parsed.get("sawyer_active", true))
+		}
+	if bool(parsed.get("splitter_hired", false)):
+		var legacy_tool: String = str(parsed.get("splitter_tool", ""))
+		var tool_id: String = ""
+		match legacy_tool:
+			"wooden": tool_id = "wooden_axe"
+			"sharpened": tool_id = "sharpened_axe"
+			"checht": tool_id = "checht_axe"
+			_: tool_id = legacy_tool
+		slots[1] = {
+			"mode":"employee",
+			"tool":tool_id,
+			"active":bool(parsed.get("splitter_active", true))
+		}
+	return slots
+
+func _normalize_work_slots() -> void:
+	var source: Variant = state.get("work_slots", [])
+	var normalized: Array = _default_work_slots()
+	if source is Array:
+		var source_array: Array = source as Array
+		for i in range(mini(3, source_array.size())):
+			var raw_slot: Variant = source_array[i]
+			if raw_slot is Dictionary:
+				var slot: Dictionary = raw_slot as Dictionary
+				var mode: String = str(slot.get("mode", "player"))
+				if mode != "employee":
+					mode = "player"
+				var tool: String = str(slot.get("tool", "")) if mode == "employee" else ""
+				var active: bool = bool(slot.get("active", false)) if mode == "employee" else false
+				normalized[i] = {"mode":mode, "tool":tool, "active":active}
+	state["work_slots"] = normalized
+
 func save_game() -> void:
 	var f:=FileAccess.open(SAVE_PATH,FileAccess.WRITE)
 	if f!=null: f.store_string(JSON.stringify(state))
 
 func load_game() -> void:
-	if not FileAccess.file_exists(SAVE_PATH): return
+	if not FileAccess.file_exists(SAVE_PATH):
+		_normalize_work_slots()
+		return
 	var f:=FileAccess.open(SAVE_PATH,FileAccess.READ)
-	if f==null: return
+	if f==null:
+		_normalize_work_slots()
+		return
 	var parsed=JSON.parse_string(f.get_as_text())
 	if parsed is Dictionary:
+		var parsed_dict: Dictionary = parsed as Dictionary
 		for key in state.keys():
-			if parsed.has(key): state[key]=parsed[key]
+			if parsed_dict.has(key): state[key]=parsed_dict[key]
+		if not parsed_dict.has("work_slots"):
+			state["work_slots"] = _migrate_legacy_work_slots(parsed_dict)
+	_normalize_work_slots()
