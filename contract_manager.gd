@@ -149,6 +149,8 @@ func _transport_capacity(tool_id: String) -> float:
 		return 0.1
 	if tool_id == "handcart":
 		return 0.2
+	if tool_id == "small_trailer":
+		return 0.5
 	return 0.0
 
 func _owned_transport(item_id: String) -> int:

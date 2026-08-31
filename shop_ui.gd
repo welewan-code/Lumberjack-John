@@ -15,7 +15,8 @@ const ITEMS: Dictionary = {
 	"frame_saw": {"category":"PILY", "name":"Rámová pila", "price":160, "asset":"res://assets/tools/frame_saw.png", "desc":"Ruční pila pro další pracovní činnosti."},
 	"aku_saw": {"category":"PILY", "name":"Aku pila", "price":790, "asset":"res://assets/tools/aku_saw.png", "desc":"Rychlejší elektrická pila."},
 	"wheelbarrow": {"category":"DOPRAVNÍ PROSTŘEDKY", "name":"Kolečko", "price":80, "asset":"res://assets/tools/wheelbarrow.png", "desc":"Základní přesun materiálu."},
-	"handcart": {"category":"DOPRAVNÍ PROSTŘEDKY", "name":"Trakař", "price":220, "asset":"res://assets/tools/trakar.png", "desc":"Dřevěný trakař. Odveze 0,2 m³ na jednu otočku."}
+	"handcart": {"category":"DOPRAVNÍ PROSTŘEDKY", "name":"Trakař", "price":220, "asset":"res://assets/tools/trakar.png", "desc":"Dřevěný trakař. Odveze 0,2 m³ na jednu otočku."},
+	"small_trailer": {"category":"DOPRAVNÍ PROSTŘEDKY", "name":"Malý vozík za auto", "price":3500, "asset":"res://assets/tools/small_trailer.png", "desc":"Starý malý přívěsný vozík. Odveze 0,5 m³ na jednu otočku."}
 }
 
 var current_category: String = "SEKERY"
@@ -27,7 +28,8 @@ var inventory: Dictionary = {
 	"frame_saw": 0,
 	"aku_saw": 0,
 	"wheelbarrow": 0,
-	"handcart": 0
+	"handcart": 0,
+	"small_trailer": 0
 }
 
 func _ready() -> void:

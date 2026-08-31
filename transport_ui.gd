@@ -3,6 +3,7 @@ extends Node
 const TRANSPORT_SAVE_PATH: String = "user://transport_state.json"
 const WHEELBARROW_AMOUNT_M3: float = 0.1
 const HANDCART_AMOUNT_M3: float = 0.2
+const SMALL_TRAILER_AMOUNT_M3: float = 0.5
 const TRANSPORT_WAGE: float = 5.0
 const TRANSPORT_TIME: float = 5.0
 const UI_REFRESH_INTERVAL: float = 0.25
@@ -116,7 +117,7 @@ func _show_transport_panel() -> void:
 	dialog.title = "Doprava – nastavení"
 	dialog.ok_button_text = "ZAVŘÍT"
 	var box: VBoxContainer = VBoxContainer.new()
-	box.custom_minimum_size = Vector2(400, 220)
+	box.custom_minimum_size = Vector2(400, 250)
 	box.add_theme_constant_override("separation", 10)
 	dialog.add_child(box)
 	box.add_child(_label(main, "DOPRAVNÍ PROSTŘEDEK", 15))
@@ -135,12 +136,17 @@ func _show_transport_panel() -> void:
 		tools.set_item_metadata(tools.item_count - 1, "handcart")
 	else:
 		box.add_child(_label(main, "Trakař nejdřív kup v obchodě.", 13))
+	if _owned_transport("small_trailer") > 0:
+		tools.add_item("Malý vozík za auto – 0,5 m³ / 5 s")
+		tools.set_item_metadata(tools.item_count - 1, "small_trailer")
+	else:
+		box.add_child(_label(main, "Malý vozík za auto nejdřív kup v obchodě.", 13))
 	_select_tool(tools, get_selected_transport_tool(main))
 	tools.item_selected.connect(_on_transport_selected.bind(tools, dialog))
 	box.add_child(tools)
 	box.add_child(_label(main, "Po přijetí zakázky vozí samo. Každý odvoz stojí 5 Kč.", 13))
 	main.add_child(dialog)
-	dialog.popup_centered(Vector2i(460, 280))
+	dialog.popup_centered(Vector2i(480, 330))
 
 func _on_transport_selected(index: int, tools: OptionButton, dialog: AcceptDialog) -> void:
 	var main: Node = get_tree().current_scene
@@ -251,6 +257,8 @@ func _transport_capacity(tool_id: String) -> float:
 		return WHEELBARROW_AMOUNT_M3
 	if tool_id == "handcart":
 		return HANDCART_AMOUNT_M3
+	if tool_id == "small_trailer":
+		return SMALL_TRAILER_AMOUNT_M3
 	return 0.0
 
 func _transport_name(tool_id: String) -> String:
@@ -258,6 +266,8 @@ func _transport_name(tool_id: String) -> String:
 		return "KOLEČKO"
 	if tool_id == "handcart":
 		return "TRAKAŘ"
+	if tool_id == "small_trailer":
+		return "MALÝ VOZÍK"
 	return "DOPRAVA"
 
 func _transport_asset(tool_id: String) -> String:
@@ -265,6 +275,8 @@ func _transport_asset(tool_id: String) -> String:
 		return "res://assets/tools/wheelbarrow.png"
 	if tool_id == "handcart":
 		return "res://assets/tools/trakar.png"
+	if tool_id == "small_trailer":
+		return "res://assets/tools/small_trailer.png"
 	return ""
 
 func _set_button_message(value: String) -> void:
