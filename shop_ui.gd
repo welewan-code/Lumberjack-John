@@ -1,7 +1,7 @@
 extends Node
 
 const SHOP_SAVE_PATH := "user://shop_inventory.json"
-const CATEGORIES: Array[String] = ["SEKERY", "PILY", "DOPRAVNÍ PROSTŘEDKY", "NÁKUP DŘEVA"]
+const CATEGORIES: Array[String] = ["SEKERY", "PILY", "ŠTÍPAČKY", "DOPRAVNÍ PROSTŘEDKY", "NÁKUP DŘEVA"]
 const LOG_PRICE_PER_M3: float = 1200.0
 const BLOCK_PRICE_PER_M3: float = 1100.0
 const STORAGE_CAPACITY: float = 10.0
@@ -46,9 +46,9 @@ func _render_shop() -> void:
 	if not is_instance_valid(host): return
 	var root := VBoxContainer.new(); root.size_flags_horizontal=Control.SIZE_EXPAND_FILL; root.size_flags_vertical=Control.SIZE_EXPAND_FILL; root.add_theme_constant_override("separation",12); host.add_child(root)
 	var title := _make_label(main,"OBCHOD",28); title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; root.add_child(title)
-	var tabs:=HBoxContainer.new(); tabs.add_theme_constant_override("separation",6); root.add_child(tabs)
+	var tabs:=HBoxContainer.new(); tabs.size_flags_horizontal=Control.SIZE_EXPAND_FILL; tabs.add_theme_constant_override("separation",6); root.add_child(tabs)
 	for category in CATEGORIES:
-		var b:=Button.new(); b.text=category; b.size_flags_horizontal=Control.SIZE_EXPAND_FILL; b.custom_minimum_size.y=42; b.add_theme_font_size_override("font_size",15); b.pressed.connect(_switch_category.bind(category)); tabs.add_child(b)
+		var b:=Button.new(); b.text=category; b.size_flags_horizontal=Control.SIZE_EXPAND_FILL; b.size_flags_stretch_ratio=1.0; b.custom_minimum_size=Vector2(0,42); b.clip_text=true; b.add_theme_font_size_override("font_size",15); b.pressed.connect(_switch_category.bind(category)); tabs.add_child(b)
 	var category_host:=VBoxContainer.new(); category_host.name="ShopCategoryHost"; category_host.size_flags_vertical=Control.SIZE_EXPAND_FILL; category_host.add_theme_constant_override("separation",10); root.add_child(category_host); _render_category(main,category_host)
 
 func _switch_category(category:String)->void:
