@@ -7,6 +7,7 @@ const AXE_OUT: float = 0.015
 const WOODEN_AXE_TIME: float = 1.8
 const SHARPENED_AXE_TIME: float = 1.6
 const CHECHT_AXE_TIME: float = 1.5
+const FICKARS_AXE_TIME: float = 1.3
 
 var state: Dictionary = {
 	"money": 0.0,
@@ -237,6 +238,7 @@ func load_player_texture() -> Texture2D:
 
 func axe_time() -> float:
 	match str(state.get("equipped_axe", "wooden")):
+		"fickars": return FICKARS_AXE_TIME
 		"checht": return CHECHT_AXE_TIME
 		"sharpened": return SHARPENED_AXE_TIME
 		_: return WOODEN_AXE_TIME
@@ -245,6 +247,7 @@ func timer_text() -> String:
 	var name:="Tupá sekera"
 	if str(state.get("equipped_axe", "wooden"))=="sharpened": name="Nabroušená sekera"
 	elif str(state.get("equipped_axe", "wooden"))=="checht": name="Štípací sekera CHECHT"
+	elif str(state.get("equipped_axe", "wooden"))=="fickars": name="Štípací sekera Fickars"
 	return "%s  –  %.1f s / sek" % [name,axe_time()]
 
 func start_chop() -> void:
