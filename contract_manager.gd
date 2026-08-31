@@ -78,9 +78,11 @@ func _apply_offline_transport(main: Node, last_seen: int, now: int) -> void:
 		return
 	if active_contracts.is_empty():
 		return
-	if _selected_transport_tool(main) != "wheelbarrow":
+	var tool: String = _selected_transport_tool(main)
+	var capacity: float = _transport_capacity(tool)
+	if capacity <= 0.0:
 		return
-	if _owned_transport("wheelbarrow") <= 0:
+	if _owned_transport(tool) <= 0:
 		return
 
 	var state: Dictionary = _main_state(main)
@@ -92,11 +94,13 @@ func _apply_offline_transport(main: Node, last_seen: int, now: int) -> void:
 		safety += 1
 		var target_index: int = -1
 		var trip_time: int = 0
+		var trip_amount: float = 0.0
 		for index: int in range(active_contracts.size()):
 			var contract: Dictionary = active_contracts[index]
 			var volume: float = float(contract.get("volume_m3", 0.0))
 			var delivered: float = float(contract.get("delivered_m3", 0.0))
-			if volume - delivered + 0.0001 < DELIVERY_STEP_M3:
+			var remaining: float = volume - delivered
+			if remaining + 0.0001 < DELIVERY_STEP_M3:
 				continue
 			var accepted_at: int = int(contract.get("accepted_at", last_seen))
 			var expires_at: int = int(contract.get("expires_at", 0))
@@ -104,20 +108,21 @@ func _apply_offline_transport(main: Node, last_seen: int, now: int) -> void:
 			if possible_time <= now and possible_time <= expires_at:
 				target_index = index
 				trip_time = possible_time
+				trip_amount = snappedf(minf(capacity, remaining), DELIVERY_STEP_M3)
 				break
-		if target_index < 0:
+		if target_index < 0 or trip_amount <= 0.0:
 			break
-		if float(state.get("split_m3", 0.0)) + 0.0001 < DELIVERY_STEP_M3:
+		if float(state.get("split_m3", 0.0)) + 0.0001 < trip_amount:
 			break
 		if float(state.get("money", 0.0)) < DELIVERY_WAGE:
 			break
 
-		state["split_m3"] = maxf(0.0, float(state.get("split_m3", 0.0)) - DELIVERY_STEP_M3)
+		state["split_m3"] = maxf(0.0, float(state.get("split_m3", 0.0)) - trip_amount)
 		state["money"] = float(state.get("money", 0.0)) - DELIVERY_WAGE
 		var target: Dictionary = active_contracts[target_index]
 		var volume: float = float(target.get("volume_m3", 0.0))
 		var delivered: float = float(target.get("delivered_m3", 0.0))
-		target["delivered_m3"] = snappedf(delivered + DELIVERY_STEP_M3, 0.1)
+		target["delivered_m3"] = snappedf(delivered + trip_amount, DELIVERY_STEP_M3)
 		active_contracts[target_index] = target
 		cursor = trip_time
 		changed = true
@@ -139,6 +144,13 @@ func _selected_transport_tool(main: Node) -> String:
 	var state: Dictionary = _main_state(main)
 	return str(state.get("transport_tool", ""))
 
+func _transport_capacity(tool_id: String) -> float:
+	if tool_id == "wheelbarrow":
+		return 0.1
+	if tool_id == "handcart":
+		return 0.2
+	return 0.0
+
 func _owned_transport(item_id: String) -> int:
 	var shop: Node = get_node_or_null("/root/ShopUI")
 	if shop == null:
@@ -152,13 +164,18 @@ func has_active_contract() -> bool:
 	_cleanup_expired(_now())
 	return not active_contracts.is_empty()
 
-func can_accept_delivery(amount: float = DELIVERY_STEP_M3) -> bool:
+func get_delivery_amount(max_amount: float = DELIVERY_STEP_M3) -> float:
 	_cleanup_expired(_now())
+	if max_amount <= 0.0:
+		return 0.0
 	for contract: Dictionary in active_contracts:
 		var remaining: float = float(contract.get("volume_m3", 0.0)) - float(contract.get("delivered_m3", 0.0))
-		if remaining + 0.0001 >= amount:
-			return true
-	return false
+		if remaining + 0.0001 >= DELIVERY_STEP_M3:
+			return snappedf(minf(max_amount, remaining), DELIVERY_STEP_M3)
+	return 0.0
+
+func can_accept_delivery(amount: float = DELIVERY_STEP_M3) -> bool:
+	return get_delivery_amount(amount) > 0.0
 
 func register_delivery(main: Node, amount: float = DELIVERY_STEP_M3) -> Dictionary:
 	_cleanup_expired(_now())
@@ -166,9 +183,13 @@ func register_delivery(main: Node, amount: float = DELIVERY_STEP_M3) -> Dictiona
 		var contract: Dictionary = active_contracts[index]
 		var volume: float = float(contract.get("volume_m3", 0.0))
 		var delivered: float = float(contract.get("delivered_m3", 0.0))
-		if volume - delivered + 0.0001 < amount:
+		var remaining: float = volume - delivered
+		if remaining + 0.0001 < DELIVERY_STEP_M3:
 			continue
-		contract["delivered_m3"] = snappedf(delivered + amount, 0.1)
+		var actual_amount: float = snappedf(minf(amount, remaining), DELIVERY_STEP_M3)
+		if actual_amount <= 0.0:
+			continue
+		contract["delivered_m3"] = snappedf(delivered + actual_amount, DELIVERY_STEP_M3)
 		active_contracts[index] = contract
 		var completed: bool = float(contract["delivered_m3"]) + 0.0001 >= volume
 		var payout: float = 0.0
@@ -185,8 +206,8 @@ func register_delivery(main: Node, amount: float = DELIVERY_STEP_M3) -> Dictiona
 				main.call("save_game")
 		_save_state()
 		ui_signature = ""
-		return {"ok": true, "completed": completed, "payout": payout, "volume_m3": volume}
-	return {"ok": false, "completed": false, "payout": 0.0}
+		return {"ok": true, "completed": completed, "payout": payout, "volume_m3": volume, "delivered_amount": actual_amount}
+	return {"ok": false, "completed": false, "payout": 0.0, "delivered_amount": 0.0}
 
 func _contract_xp(volume: float) -> int:
 	return int(round(volume / DELIVERY_STEP_M3)) * XP_PER_DELIVERY_STEP
