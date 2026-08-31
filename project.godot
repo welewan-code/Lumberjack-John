@@ -14,6 +14,8 @@ TabRouter="*res://tab_router.gd"
 CompanyUI="*res://company_ui.gd"
 ContractManager="*res://contract_manager.gd"
 TransportUI="*res://transport_ui.gd"
+SaveTransfer="*res://save_transfer.gd"
+MobileUI="*res://mobile_ui.gd"
 
 [display]
 window/size/viewport_width=1600
@@ -22,6 +24,8 @@ window/size/window_width_override=1600
 window/size/window_height_override=900
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+window/handheld/orientation=4
+window/energy_saving/keep_screen_on=true
 
 [rendering]
 renderer/rendering_method="gl_compatibility"
