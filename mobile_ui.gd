@@ -1,5 +1,6 @@
 extends Node
 
+const MOBILE_UI_SCALE: float = 1.10
 const TOUCH_MIN_HEIGHT: float = 56.0
 const NAV_MIN_HEIGHT: float = 68.0
 const DIALOG_MIN_SIZE: Vector2i = Vector2i(560, 420)
@@ -9,6 +10,8 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	get_tree().node_added.connect(_on_node_added)
 	call_deferred("_apply_existing_tree")
+	if OS.has_feature("mobile"):
+		get_tree().root.content_scale_factor = MOBILE_UI_SCALE
 	if OS.has_feature("mobile") and DisplayServer.has_feature(DisplayServer.FEATURE_ORIENTATION):
 		DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR_LANDSCAPE)
 
