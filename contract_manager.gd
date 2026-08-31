@@ -4,6 +4,8 @@ const SAVE_PATH: String = "user://neighbor_contracts.json"
 const OFFLINE_PATH: String = "user://drevo_tycoon_offline.json"
 const OFFER_LIFETIME: int = 120
 const ACTIVE_LIFETIME: int = 300
+const LARGE_ACTIVE_LIFETIME: int = 600
+const OFFER_VOLUMES: Array[float] = [0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 1.5, 2.0]
 const DELIVERY_STEP_M3: float = 0.1
 const DELIVERY_WAGE: float = 5.0
 const DELIVERY_SECONDS: int = 5
@@ -190,7 +192,7 @@ func _contract_xp(volume: float) -> int:
 	return int(round(volume / DELIVERY_STEP_M3)) * XP_PER_DELIVERY_STEP
 
 func _generate_offer(now: int) -> void:
-	var volume: float = float(randi_range(1, 5)) / 10.0
+	var volume: float = OFFER_VOLUMES[randi_range(0, OFFER_VOLUMES.size() - 1)]
 	current_offer = {
 		"id": next_id,
 		"volume_m3": volume,
@@ -235,7 +237,9 @@ func _accept_offer() -> void:
 		return
 	var contract: Dictionary = current_offer.duplicate(true)
 	contract["accepted_at"] = now
-	contract["expires_at"] = now + ACTIVE_LIFETIME
+	var volume: float = float(contract.get("volume_m3", 0.0))
+	var lifetime: int = LARGE_ACTIVE_LIFETIME if volume >= 1.0 else ACTIVE_LIFETIME
+	contract["expires_at"] = now + lifetime
 	contract["delivered_m3"] = 0.0
 	active_contracts.append(contract)
 	current_offer = {}
