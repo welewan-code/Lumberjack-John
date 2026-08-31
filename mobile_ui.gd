@@ -1,17 +1,15 @@
 extends Node
 
 const MOBILE_UI_SCALE: float = 1.10
-const TOUCH_MIN_HEIGHT: float = 56.0
-const NAV_MIN_HEIGHT: float = 68.0
-const DIALOG_MIN_SIZE: Vector2i = Vector2i(560, 420)
+const TOUCH_MIN_HEIGHT: float = 62.0
+const NAV_MIN_HEIGHT: float = 75.0
+const DIALOG_MIN_SIZE: Vector2i = Vector2i(616, 462)
 const NAV_TABS: Array[String] = ["FIRMA", "PRÁCE", "OBCHOD", "SKLAD", "STATISTIKY", "ÚSPĚCHY", "NASTAVENÍ"]
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	get_tree().node_added.connect(_on_node_added)
 	call_deferred("_apply_existing_tree")
-	if OS.has_feature("mobile"):
-		get_tree().root.content_scale_factor = MOBILE_UI_SCALE
 	if OS.has_feature("mobile") and DisplayServer.has_feature(DisplayServer.FEATURE_ORIENTATION):
 		DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR_LANDSCAPE)
 
@@ -46,6 +44,7 @@ func _apply_dialog(dialog: AcceptDialog) -> void:
 func _apply_control(control: Control) -> void:
 	if not is_instance_valid(control):
 		return
+	_scale_font_once(control)
 	if control is Button:
 		_apply_button(control as Button)
 	elif control is SpinBox:
@@ -55,10 +54,25 @@ func _apply_control(control: Control) -> void:
 		var line: LineEdit = control as LineEdit
 		line.custom_minimum_size.y = maxf(line.custom_minimum_size.y, TOUCH_MIN_HEIGHT)
 
+func _scale_font_once(control: Control) -> void:
+	if control.has_meta("mobile_font_scaled"):
+		return
+	control.set_meta("mobile_font_scaled", true)
+
+	var font_size: int = control.get_theme_font_size("font_size")
+	if font_size > 0:
+		control.add_theme_font_size_override("font_size", ceili(float(font_size) * MOBILE_UI_SCALE))
+
+	if control is RichTextLabel:
+		var rich: RichTextLabel = control as RichTextLabel
+		var normal_size: int = rich.get_theme_font_size("normal_font_size")
+		if normal_size > 0:
+			rich.add_theme_font_size_override("normal_font_size", ceili(float(normal_size) * MOBILE_UI_SCALE))
+
 func _apply_button(button: Button) -> void:
 	button.focus_mode = Control.FOCUS_NONE
 	button.mouse_filter = Control.MOUSE_FILTER_STOP
 	var target_height: float = NAV_MIN_HEIGHT if button.text in NAV_TABS else TOUCH_MIN_HEIGHT
 	button.custom_minimum_size.y = maxf(button.custom_minimum_size.y, target_height)
 	if button.text in NAV_TABS:
-		button.add_theme_font_size_override("font_size", 16)
+		button.add_theme_font_size_override("font_size", 18)
