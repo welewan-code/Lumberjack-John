@@ -11,10 +11,14 @@ const SAW_OUT_M3: float = 0.033
 const SPLITTER_TIME_WOODEN: float = 1.8
 const SPLITTER_TIME_SHARPENED: float = 1.6
 const SPLITTER_TIME_CHECHT: float = 1.5
+const SPLITTER_TIME_FICKARS: float = 1.3
+const FICKARS_BONUS_CHANCE: float = 0.05
+const FICKARS_BONUS_IN_M3: float = 0.020
+const FICKARS_BONUS_OUT_M3: float = 0.030
 const SAWYER_TIME_FRAME: float = 20.0
 const SAWYER_TIME_AKU: float = 14.0
 const SLOT_COUNT: int = 3
-const TOOL_IDS: Array[String] = ["wooden_axe", "sharpened_axe", "checht_axe", "frame_saw", "aku_saw"]
+const TOOL_IDS: Array[String] = ["wooden_axe", "sharpened_axe", "checht_axe", "fickars_axe", "frame_saw", "aku_saw"]
 
 var last_tab: String = ""
 var smelinar_amount: SpinBox = null
@@ -495,7 +499,7 @@ func _is_known_tool(tool_id: String) -> bool:
 func _tool_role(tool_id: String) -> String:
 	match tool_id:
 		"frame_saw", "aku_saw": return "sawyer"
-		"wooden_axe", "sharpened_axe", "checht_axe": return "splitter"
+		"wooden_axe", "sharpened_axe", "checht_axe", "fickars_axe": return "splitter"
 		_: return ""
 
 func _tool_role_name(tool_id: String) -> String:
@@ -511,6 +515,7 @@ func _tool_name(tool_id: String) -> String:
 		"wooden_axe": return "Tupá sekera"
 		"sharpened_axe": return "Nabroušená sekera"
 		"checht_axe": return "Štípací sekera CHECHT"
+		"fickars_axe": return "Štípací sekera Fickars"
 		_: return "Bez nástroje"
 
 func _tool_menu_name(tool_id: String) -> String:
@@ -525,6 +530,7 @@ func _tool_cycle_time(tool_id: String) -> float:
 		"wooden_axe": return SPLITTER_TIME_WOODEN
 		"sharpened_axe": return SPLITTER_TIME_SHARPENED
 		"checht_axe": return SPLITTER_TIME_CHECHT
+		"fickars_axe": return SPLITTER_TIME_FICKARS
 		_: return 0.0
 
 func _tool_wage(tool_id: String) -> float:
@@ -563,7 +569,7 @@ func _perform_tool_cycle(state: Dictionary, tool_id: String) -> bool:
 	if _tool_role(tool_id) == "sawyer":
 		return _do_saw_cycle(state)
 	if _tool_role(tool_id) == "splitter":
-		return _do_split_cycle(state)
+		return _do_split_cycle(state, tool_id)
 	return false
 
 func _do_saw_cycle(state: Dictionary) -> bool:
@@ -579,17 +585,25 @@ func _do_saw_cycle(state: Dictionary) -> bool:
 	state["roundwood_m3"] = float(state.get("roundwood_m3", 0.0)) + SAW_OUT_M3
 	return true
 
-func _do_split_cycle(state: Dictionary) -> bool:
+func _do_split_cycle(state: Dictionary, tool_id: String) -> bool:
 	if float(state.get("money", 0.0)) < SPLITTER_WAGE:
 		return false
-	if float(state.get("roundwood_m3", 0.0)) + 0.0001 < CHOP_IN_M3:
+	var available: float = float(state.get("roundwood_m3", 0.0))
+	if available + 0.0001 < CHOP_IN_M3:
 		return false
-	var net_growth: float = CHOP_OUT_M3 - CHOP_IN_M3
+	var input_amount: float = CHOP_IN_M3
+	var output_amount: float = CHOP_OUT_M3
+	if tool_id == "fickars_axe" and randf() < FICKARS_BONUS_CHANCE:
+		var bonus_growth: float = FICKARS_BONUS_OUT_M3 - FICKARS_BONUS_IN_M3
+		if available + 0.0001 >= FICKARS_BONUS_IN_M3 and _storage_used(state) + bonus_growth <= STORAGE_CAPACITY + 0.0001:
+			input_amount = FICKARS_BONUS_IN_M3
+			output_amount = FICKARS_BONUS_OUT_M3
+	var net_growth: float = output_amount - input_amount
 	if _storage_used(state) + net_growth > STORAGE_CAPACITY + 0.0001:
 		return false
 	state["money"] = float(state.get("money", 0.0)) - SPLITTER_WAGE
-	state["roundwood_m3"] = maxf(0.0, float(state.get("roundwood_m3", 0.0)) - CHOP_IN_M3)
-	state["split_m3"] = float(state.get("split_m3", 0.0)) + CHOP_OUT_M3
+	state["roundwood_m3"] = maxf(0.0, available - input_amount)
+	state["split_m3"] = float(state.get("split_m3", 0.0)) + output_amount
 	return true
 
 func _build_left(main: Node) -> PanelContainer:
@@ -703,17 +717,26 @@ func _process_chop(main: Node, delta: float) -> void:
 	chop_running = false
 	var state: Dictionary = _state(main)
 	var available: float = float(state.get("roundwood_m3", 0.0))
-	var net_growth: float = CHOP_OUT_M3 - CHOP_IN_M3
-	if available + 0.0001 >= CHOP_IN_M3 and _storage_used(state) + net_growth <= STORAGE_CAPACITY + 0.0001:
-		state["roundwood_m3"] = maxf(0.0, available - CHOP_IN_M3)
-		state["split_m3"] = float(state.get("split_m3", 0.0)) + CHOP_OUT_M3
+	var input_amount: float = CHOP_IN_M3
+	var output_amount: float = CHOP_OUT_M3
+	var bonus: bool = false
+	if str(state.get("equipped_axe", "wooden")) == "fickars" and randf() < FICKARS_BONUS_CHANCE:
+		var bonus_growth: float = FICKARS_BONUS_OUT_M3 - FICKARS_BONUS_IN_M3
+		if available + 0.0001 >= FICKARS_BONUS_IN_M3 and _storage_used(state) + bonus_growth <= STORAGE_CAPACITY + 0.0001:
+			input_amount = FICKARS_BONUS_IN_M3
+			output_amount = FICKARS_BONUS_OUT_M3
+			bonus = true
+	var net_growth: float = output_amount - input_amount
+	if available + 0.0001 >= input_amount and _storage_used(state) + net_growth <= STORAGE_CAPACITY + 0.0001:
+		state["roundwood_m3"] = maxf(0.0, available - input_amount)
+		state["split_m3"] = float(state.get("split_m3", 0.0)) + output_amount
 		main.set("state", state)
 		if main.has_method("update_hud"):
 			main.call("update_hud")
 		if main.has_method("save_game"):
 			main.call("save_game")
 		if is_instance_valid(chop_timer):
-			chop_timer.text = "+0,015 m³ štípaného"
+			chop_timer.text = "+0,030 m³ štípaného • BONUS" if bonus else "+0,015 m³ štípaného"
 	if is_instance_valid(chop_progress):
 		chop_progress.value = 0.0
 	if is_instance_valid(chop_button):
