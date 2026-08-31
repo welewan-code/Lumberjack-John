@@ -15,7 +15,7 @@ const ITEMS: Dictionary = {
 	"frame_saw": {"category":"PILY", "name":"Rámová pila", "price":160, "asset":"res://assets/tools/frame_saw.png", "desc":"Ruční pila pro další pracovní činnosti."},
 	"aku_saw": {"category":"PILY", "name":"Aku pila", "price":790, "asset":"res://assets/tools/aku_saw.png", "desc":"Rychlejší elektrická pila."},
 	"wheelbarrow": {"category":"DOPRAVNÍ PROSTŘEDKY", "name":"Kolečko", "price":80, "asset":"res://assets/tools/wheelbarrow.png", "desc":"Základní přesun materiálu."},
-	"handcart": {"category":"DOPRAVNÍ PROSTŘEDKY", "name":"Ruční vozík", "price":2200, "asset":"", "desc":"Větší kapacita než kolečko."}
+	"handcart": {"category":"DOPRAVNÍ PROSTŘEDKY", "name":"Trakař", "price":220, "asset":"res://assets/tools/trakar.png", "desc":"Dřevěný trakař. Odveze 0,2 m³ na jednu otočku."}
 }
 
 var current_category: String = "SEKERY"
