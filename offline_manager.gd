@@ -13,6 +13,10 @@ const STORAGE_CAPACITY: float = 10.0
 const SPLITTER_TIME_WOODEN: float = 1.8
 const SPLITTER_TIME_SHARPENED: float = 1.6
 const SPLITTER_TIME_CHECHT: float = 1.5
+const SPLITTER_TIME_FICKARS: float = 1.3
+const FICKARS_BONUS_CHANCE: float = 0.05
+const FICKARS_BONUS_IN_M3: float = 0.020
+const FICKARS_BONUS_OUT_M3: float = 0.030
 const SAWYER_TIME_FRAME: float = 20.0
 const SAWYER_TIME_AKU: float = 14.0
 const SLOT_COUNT: int = 3
@@ -105,7 +109,6 @@ func _apply_offline_progress() -> void:
 		if result == CYCLE_SUCCESS:
 			changed = true
 		elif result == CYCLE_STORAGE_FULL:
-			# Sklad se offline nemůže uvolnit, ale menší čistý přírůstek jiného nástroje se ještě může vejít.
 			next_events[slot_index] = SENTINEL
 		elif result == CYCLE_NO_MONEY or result == CYCLE_INVALID:
 			next_events[slot_index] = SENTINEL
@@ -152,7 +155,7 @@ func _try_tool_cycle(state: Dictionary, tool_id: String) -> int:
 	if role == "sawyer":
 		return _try_saw_cycle(state)
 	if role == "splitter":
-		return _try_split_cycle(state)
+		return _try_split_cycle(state, tool_id)
 	return CYCLE_INVALID
 
 func _try_saw_cycle(state: Dictionary) -> int:
@@ -168,17 +171,25 @@ func _try_saw_cycle(state: Dictionary) -> int:
 	state["roundwood_m3"] = float(state.get("roundwood_m3", 0.0)) + SAW_OUT_M3
 	return CYCLE_SUCCESS
 
-func _try_split_cycle(state: Dictionary) -> int:
+func _try_split_cycle(state: Dictionary, tool_id: String) -> int:
 	if float(state.get("money", 0.0)) < SPLITTER_WAGE:
 		return CYCLE_NO_MONEY
-	if float(state.get("roundwood_m3", 0.0)) + 0.0001 < CHOP_IN_M3:
+	var available: float = float(state.get("roundwood_m3", 0.0))
+	if available + 0.0001 < CHOP_IN_M3:
 		return CYCLE_NO_INPUT
-	var net_growth: float = CHOP_OUT_M3 - CHOP_IN_M3
+	var input_amount: float = CHOP_IN_M3
+	var output_amount: float = CHOP_OUT_M3
+	if tool_id == "fickars_axe" and randf() < FICKARS_BONUS_CHANCE:
+		var bonus_growth: float = FICKARS_BONUS_OUT_M3 - FICKARS_BONUS_IN_M3
+		if available + 0.0001 >= FICKARS_BONUS_IN_M3 and _storage_used(state) + bonus_growth <= STORAGE_CAPACITY + 0.0001:
+			input_amount = FICKARS_BONUS_IN_M3
+			output_amount = FICKARS_BONUS_OUT_M3
+	var net_growth: float = output_amount - input_amount
 	if _storage_used(state) + net_growth > STORAGE_CAPACITY + 0.0001:
 		return CYCLE_STORAGE_FULL
 	state["money"] = float(state.get("money", 0.0)) - SPLITTER_WAGE
-	state["roundwood_m3"] = maxf(0.0, float(state.get("roundwood_m3", 0.0)) - CHOP_IN_M3)
-	state["split_m3"] = float(state.get("split_m3", 0.0)) + CHOP_OUT_M3
+	state["roundwood_m3"] = maxf(0.0, available - input_amount)
+	state["split_m3"] = float(state.get("split_m3", 0.0)) + output_amount
 	return CYCLE_SUCCESS
 
 func _work_slots(state: Dictionary) -> Array:
@@ -203,7 +214,7 @@ func _work_slots(state: Dictionary) -> Array:
 func _tool_role(tool_id: String) -> String:
 	match tool_id:
 		"frame_saw", "aku_saw": return "sawyer"
-		"wooden_axe", "sharpened_axe", "checht_axe": return "splitter"
+		"wooden_axe", "sharpened_axe", "checht_axe", "fickars_axe": return "splitter"
 		_: return ""
 
 func _tool_cycle_time(tool_id: String) -> float:
@@ -213,6 +224,7 @@ func _tool_cycle_time(tool_id: String) -> float:
 		"wooden_axe": return SPLITTER_TIME_WOODEN
 		"sharpened_axe": return SPLITTER_TIME_SHARPENED
 		"checht_axe": return SPLITTER_TIME_CHECHT
+		"fickars_axe": return SPLITTER_TIME_FICKARS
 		_: return 0.0
 
 func _storage_used(state: Dictionary) -> float:
