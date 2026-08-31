@@ -8,10 +8,10 @@ run/main_scene="res://Main.tscn"
 
 [autoload]
 WorkRewards="*res://work_rewards.gd"
-ShopUI="*res://shop_ui.gd"
+ShopUI="*res://shop_ui_parksajt.gd"
 AxeAnimator="*res://axe_animator.gd"
 TabRouter="*res://tab_router.gd"
-CompanyUI="*res://company_ui.gd"
+CompanyUI="*res://company_ui_parksajt.gd"
 ContractManager="*res://contract_manager.gd"
 TransportUI="*res://transport_ui.gd"
 
