@@ -91,12 +91,13 @@ func _add_item_card(main:Node,grid:GridContainer,item_id:String,item:Dictionary)
 	var margin:=MarginContainer.new(); margin.add_theme_constant_override("margin_left",14); margin.add_theme_constant_override("margin_right",14); margin.add_theme_constant_override("margin_top",12); margin.add_theme_constant_override("margin_bottom",12); panel.add_child(margin)
 	var row:=HBoxContainer.new(); row.add_theme_constant_override("separation",12); margin.add_child(row)
 	var asset_path:String=str(item.get("asset",""))
-	if asset_path!="" and ResourceLoader.exists(asset_path):
+	if asset_path!="":
 		if item_id=="checht_axe":
 			_add_checht_preview(row,asset_path)
 		else:
-			var tex:=TextureRect.new(); tex.custom_minimum_size=Vector2(120,120); tex.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; tex.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED; var res:=ResourceLoader.load(asset_path)
-			if res is Texture2D: tex.texture=res as Texture2D
+			var tex:=TextureRect.new(); tex.custom_minimum_size=Vector2(120,120); tex.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; tex.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			var loaded_tex:Texture2D=_load_shop_texture(asset_path)
+			if loaded_tex!=null: tex.texture=loaded_tex
 			row.add_child(tex)
 	var info:=VBoxContainer.new(); info.size_flags_horizontal=Control.SIZE_EXPAND_FILL; info.add_theme_constant_override("separation",5); row.add_child(info)
 	var name_label:=_make_label(main,str(item["name"]),20); name_label.add_theme_color_override("font_color",Color("#ffca42")); info.add_child(name_label); info.add_child(_make_label(main,str(item["desc"]),14))
@@ -113,6 +114,17 @@ func _add_item_card(main:Node,grid:GridContainer,item_id:String,item:Dictionary)
 		_add_buy_button(main,actions,item_id,price,owned)
 	else:
 		_add_buy_button(main,actions,item_id,price,owned)
+
+func _load_shop_texture(asset_path:String)->Texture2D:
+	if asset_path=="res://assets/tools/parksajt_chainsaw.png" or asset_path=="res://assets/tools/small_trailer.png":
+		var image:Image=Image.load_from_file(asset_path)
+		if image!=null and not image.is_empty():
+			return ImageTexture.create_from_image(image)
+	if ResourceLoader.exists(asset_path):
+		var resource:Resource=ResourceLoader.load(asset_path)
+		if resource is Texture2D:
+			return resource as Texture2D
+	return null
 
 func _add_buy_button(main:Node,actions:HBoxContainer,item_id:String,price:int,owned:int)->void:
 	var buy:=Button.new(); buy.size_flags_horizontal=Control.SIZE_EXPAND_FILL; buy.custom_minimum_size.y=36

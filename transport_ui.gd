@@ -100,14 +100,24 @@ func _refresh_transport_button(main: Node) -> void:
 			transport_button.text = "%s\nČEKÁ NA ZAKÁZKU\n%.1f m³ • 5 s" % [tool_name, capacity]
 		if transport_button.icon == null:
 			var asset_path: String = _transport_asset(tool)
-			if ResourceLoader.exists(asset_path):
-				var resource: Resource = ResourceLoader.load(asset_path)
-				if resource is Texture2D:
-					transport_button.icon = resource as Texture2D
-					transport_button.expand_icon = true
+			var texture: Texture2D = _load_transport_texture(asset_path)
+			if texture != null:
+				transport_button.icon = texture
+				transport_button.expand_icon = true
 	else:
 		transport_button.icon = null
 		transport_button.text = "+\nDOPRAVA\nVYBRAT PROSTŘEDEK"
+
+func _load_transport_texture(asset_path: String) -> Texture2D:
+	if asset_path == "res://assets/tools/small_trailer.png":
+		var image: Image = Image.load_from_file(asset_path)
+		if image != null and not image.is_empty():
+			return ImageTexture.create_from_image(image)
+	if asset_path != "" and ResourceLoader.exists(asset_path):
+		var resource: Resource = ResourceLoader.load(asset_path)
+		if resource is Texture2D:
+			return resource as Texture2D
+	return null
 
 func _show_transport_panel() -> void:
 	var main: Node = get_tree().current_scene
