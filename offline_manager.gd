@@ -3,8 +3,9 @@ extends Node
 const OFFLINE_PATH: String = "user://drevo_tycoon_offline.json"
 const HEARTBEAT_SECONDS: float = 5.0
 
-const SPLITTER_WAGE: float = 2.0
-const SAWYER_WAGE: float = 5.0
+const SPLITTER_WAGE_PER_10_MIN: float = 150.0
+const SAWYER_WAGE_PER_10_MIN: float = 200.0
+const WAGE_PERIOD_SECONDS: float = 600.0
 const SAW_IN_M3: float = 0.025
 const SAW_OUT_M3: float = 0.033
 const CHOP_IN_M3: float = 0.010
@@ -153,26 +154,34 @@ func _has_future_saw_event(next_events: Array[float], tools: Array[String], elap
 func _try_tool_cycle(state: Dictionary, tool_id: String) -> int:
 	var role: String = _tool_role(tool_id)
 	if role == "sawyer":
-		return _try_saw_cycle(state)
+		return _try_saw_cycle(state, tool_id)
 	if role == "splitter":
 		return _try_split_cycle(state, tool_id)
 	return CYCLE_INVALID
 
-func _try_saw_cycle(state: Dictionary) -> int:
-	if float(state.get("money", 0.0)) < SAWYER_WAGE:
+func _tool_wage(tool_id: String) -> float:
+	return SAWYER_WAGE_PER_10_MIN if _tool_role(tool_id) == "sawyer" else SPLITTER_WAGE_PER_10_MIN
+
+func _tool_cycle_wage(tool_id: String) -> float:
+	return _tool_wage(tool_id) * _tool_cycle_time(tool_id) / WAGE_PERIOD_SECONDS
+
+func _try_saw_cycle(state: Dictionary, tool_id: String) -> int:
+	var cycle_wage: float = _tool_cycle_wage(tool_id)
+	if float(state.get("money", 0.0)) + 0.0001 < cycle_wage:
 		return CYCLE_NO_MONEY
 	if float(state.get("logs_m3", 0.0)) + 0.0001 < SAW_IN_M3:
 		return CYCLE_NO_INPUT
 	var net_growth: float = SAW_OUT_M3 - SAW_IN_M3
 	if _storage_used(state) + net_growth > STORAGE_CAPACITY + 0.0001:
 		return CYCLE_STORAGE_FULL
-	state["money"] = float(state.get("money", 0.0)) - SAWYER_WAGE
+	state["money"] = maxf(0.0, float(state.get("money", 0.0)) - cycle_wage)
 	state["logs_m3"] = maxf(0.0, float(state.get("logs_m3", 0.0)) - SAW_IN_M3)
 	state["roundwood_m3"] = float(state.get("roundwood_m3", 0.0)) + SAW_OUT_M3
 	return CYCLE_SUCCESS
 
 func _try_split_cycle(state: Dictionary, tool_id: String) -> int:
-	if float(state.get("money", 0.0)) < SPLITTER_WAGE:
+	var cycle_wage: float = _tool_cycle_wage(tool_id)
+	if float(state.get("money", 0.0)) + 0.0001 < cycle_wage:
 		return CYCLE_NO_MONEY
 	var available: float = float(state.get("roundwood_m3", 0.0))
 	if available + 0.0001 < CHOP_IN_M3:
@@ -187,7 +196,7 @@ func _try_split_cycle(state: Dictionary, tool_id: String) -> int:
 	var net_growth: float = output_amount - input_amount
 	if _storage_used(state) + net_growth > STORAGE_CAPACITY + 0.0001:
 		return CYCLE_STORAGE_FULL
-	state["money"] = float(state.get("money", 0.0)) - SPLITTER_WAGE
+	state["money"] = maxf(0.0, float(state.get("money", 0.0)) - cycle_wage)
 	state["roundwood_m3"] = maxf(0.0, available - input_amount)
 	state["split_m3"] = float(state.get("split_m3", 0.0)) + output_amount
 	return CYCLE_SUCCESS
