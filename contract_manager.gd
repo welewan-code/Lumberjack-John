@@ -3,9 +3,10 @@ extends Node
 const SAVE_PATH: String = "user://neighbor_contracts.json"
 const OFFLINE_PATH: String = "user://drevo_tycoon_offline.json"
 const OFFER_LIFETIME: int = 120
-const ACTIVE_LIFETIME: int = 300
-const LARGE_ACTIVE_LIFETIME: int = 600
-const OFFER_VOLUMES: Array[float] = [0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 1.5, 2.0]
+const ACTIVE_LIFETIME: int = 1200
+const WHEELBARROW_OFFER_VOLUMES: Array[float] = [0.1, 0.2, 0.3, 0.4, 0.5]
+const HANDCART_OFFER_VOLUMES: Array[float] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+const SMALL_TRAILER_OFFER_VOLUMES: Array[float] = [0.5, 1.0, 1.5, 2.0, 2.5]
 const DELIVERY_STEP_M3: float = 0.1
 const DELIVERY_WAGE: float = 5.0
 const DELIVERY_SECONDS: int = 5
@@ -43,17 +44,24 @@ func _process(delta: float) -> void:
 		return
 	tick_elapsed = 0.0
 	var now: int = _now()
+	var main: Node = get_tree().current_scene
 	var changed: bool = _cleanup_expired(now)
+	if not current_offer.is_empty() and main != null:
+		var selected_tool: String = _selected_transport_tool(main)
+		var offer_tool: String = str(current_offer.get("transport_tool", ""))
+		if offer_tool != "" and offer_tool != selected_tool:
+			current_offer = {}
+			next_offer_at = now + 1
+			changed = true
 	if not current_offer.is_empty() and now >= int(current_offer.get("expires_at", 0)):
 		current_offer = {}
 		_schedule_next_offer(now)
 		changed = true
 	if current_offer.is_empty() and next_offer_at > 0 and now >= next_offer_at:
-		_generate_offer(now)
+		_generate_offer(now, main)
 		changed = true
 	if changed:
 		_save_state()
-	var main: Node = get_tree().current_scene
 	if main != null and str(main.get("current_tab")) == "FIRMA":
 		_ensure_ui(main, now)
 
@@ -97,6 +105,8 @@ func _apply_offline_transport(main: Node, last_seen: int, now: int) -> void:
 		var trip_amount: float = 0.0
 		for index: int in range(active_contracts.size()):
 			var contract: Dictionary = active_contracts[index]
+			if not _contract_matches_tool(contract, tool):
+				continue
 			var volume: float = float(contract.get("volume_m3", 0.0))
 			var delivered: float = float(contract.get("delivered_m3", 0.0))
 			var remaining: float = volume - delivered
@@ -137,12 +147,14 @@ func _apply_offline_transport(main: Node, last_seen: int, now: int) -> void:
 		main.set("state", state)
 		ui_signature = ""
 
-func _selected_transport_tool(main: Node) -> String:
+func _selected_transport_tool(main: Node = null) -> String:
 	var transport: Node = get_node_or_null("/root/TransportUI")
 	if transport != null and transport.has_method("get_selected_transport_tool"):
 		return str(transport.call("get_selected_transport_tool", main))
-	var state: Dictionary = _main_state(main)
-	return str(state.get("transport_tool", ""))
+	if main != null:
+		var state: Dictionary = _main_state(main)
+		return str(state.get("transport_tool", ""))
+	return ""
 
 func _transport_capacity(tool_id: String) -> float:
 	if tool_id == "wheelbarrow":
@@ -152,6 +164,19 @@ func _transport_capacity(tool_id: String) -> float:
 	if tool_id == "small_trailer":
 		return 0.5
 	return 0.0
+
+func _transport_name(tool_id: String) -> String:
+	if tool_id == "wheelbarrow":
+		return "Kolečko"
+	if tool_id == "handcart":
+		return "Trakař"
+	if tool_id == "small_trailer":
+		return "Malý vozík"
+	return "Doprava"
+
+func _contract_matches_tool(contract: Dictionary, tool_id: String) -> bool:
+	var assigned_tool: String = str(contract.get("transport_tool", ""))
+	return assigned_tool == "" or assigned_tool == tool_id
 
 func _owned_transport(item_id: String) -> int:
 	var shop: Node = get_node_or_null("/root/ShopUI")
@@ -170,7 +195,10 @@ func get_delivery_amount(max_amount: float = DELIVERY_STEP_M3) -> float:
 	_cleanup_expired(_now())
 	if max_amount <= 0.0:
 		return 0.0
+	var tool: String = _selected_transport_tool(get_tree().current_scene)
 	for contract: Dictionary in active_contracts:
+		if not _contract_matches_tool(contract, tool):
+			continue
 		var remaining: float = float(contract.get("volume_m3", 0.0)) - float(contract.get("delivered_m3", 0.0))
 		if remaining + 0.0001 >= DELIVERY_STEP_M3:
 			return snappedf(minf(max_amount, remaining), DELIVERY_STEP_M3)
@@ -181,8 +209,11 @@ func can_accept_delivery(amount: float = DELIVERY_STEP_M3) -> bool:
 
 func register_delivery(main: Node, amount: float = DELIVERY_STEP_M3) -> Dictionary:
 	_cleanup_expired(_now())
+	var tool: String = _selected_transport_tool(main)
 	for index: int in range(active_contracts.size()):
 		var contract: Dictionary = active_contracts[index]
+		if not _contract_matches_tool(contract, tool):
+			continue
 		var volume: float = float(contract.get("volume_m3", 0.0))
 		var delivered: float = float(contract.get("delivered_m3", 0.0))
 		var remaining: float = volume - delivered
@@ -214,12 +245,28 @@ func register_delivery(main: Node, amount: float = DELIVERY_STEP_M3) -> Dictiona
 func _contract_xp(volume: float) -> int:
 	return int(round(volume / DELIVERY_STEP_M3)) * XP_PER_DELIVERY_STEP
 
-func _generate_offer(now: int) -> void:
-	var volume: float = OFFER_VOLUMES[randi_range(0, OFFER_VOLUMES.size() - 1)]
+func _offer_volumes_for_tool(tool_id: String) -> Array[float]:
+	if tool_id == "wheelbarrow":
+		return WHEELBARROW_OFFER_VOLUMES
+	if tool_id == "handcart":
+		return HANDCART_OFFER_VOLUMES
+	if tool_id == "small_trailer":
+		return SMALL_TRAILER_OFFER_VOLUMES
+	return []
+
+func _generate_offer(now: int, main: Node) -> void:
+	var tool: String = _selected_transport_tool(main)
+	var volumes: Array[float] = _offer_volumes_for_tool(tool)
+	if volumes.is_empty() or _owned_transport(tool) <= 0:
+		next_offer_at = now + 5
+		ui_signature = ""
+		return
+	var volume: float = volumes[randi_range(0, volumes.size() - 1)]
 	current_offer = {
 		"id": next_id,
 		"volume_m3": volume,
 		"price_per_m3": _roll_price(),
+		"transport_tool": tool,
 		"expires_at": now + OFFER_LIFETIME
 	}
 	next_id += 1
@@ -258,11 +305,13 @@ func _accept_offer() -> void:
 		_schedule_next_offer(now)
 		_save_state()
 		return
+	var main: Node = get_tree().current_scene
+	var required_tool: String = str(current_offer.get("transport_tool", ""))
+	if required_tool != "" and _selected_transport_tool(main) != required_tool:
+		return
 	var contract: Dictionary = current_offer.duplicate(true)
 	contract["accepted_at"] = now
-	var volume: float = float(contract.get("volume_m3", 0.0))
-	var lifetime: int = LARGE_ACTIVE_LIFETIME if volume >= 1.0 else ACTIVE_LIFETIME
-	contract["expires_at"] = now + lifetime
+	contract["expires_at"] = now + ACTIVE_LIFETIME
 	contract["delivered_m3"] = 0.0
 	active_contracts.append(contract)
 	current_offer = {}
@@ -329,7 +378,11 @@ func _ensure_ui(main: Node, now: int) -> void:
 	content.add_child(offer_panel)
 
 	if current_offer.is_empty():
-		offer_content.add_child(_label(main, "Teď nikdo nic nechce.", 12))
+		var selected_tool: String = _selected_transport_tool(main)
+		if selected_tool == "" or _owned_transport(selected_tool) <= 0:
+			offer_content.add_child(_label(main, "Vyber koupený dopravní prostředek.", 12))
+		else:
+			offer_content.add_child(_label(main, "Teď nikdo nic nechce.", 12))
 		var wait_label: Label = _label(main, "", 11)
 		wait_label.name = "NeighborWaitLabel"
 		offer_content.add_child(wait_label)
@@ -337,7 +390,8 @@ func _ensure_ui(main: Node, now: int) -> void:
 		var volume: float = float(current_offer.get("volume_m3", 0.0))
 		var price: int = int(current_offer.get("price_per_m3", 0))
 		var total: float = volume * float(price)
-		offer_content.add_child(_label(main, "%.1f m³ štípaného • %d Kč/m³" % [volume, price], 12))
+		var offer_tool: String = str(current_offer.get("transport_tool", ""))
+		offer_content.add_child(_label(main, "%s • %.1f m³ štípaného • %d Kč/m³" % [_transport_name(offer_tool), volume, price], 12))
 		var offer_timer: Label = _label(main, "", 11)
 		offer_timer.name = "NeighborOfferTimer"
 		offer_timer.set_meta("total", total)
@@ -349,7 +403,7 @@ func _ensure_ui(main: Node, now: int) -> void:
 		offer_content.add_child(accept)
 
 	if not active_contracts.is_empty():
-		var active_title: Label = _label(main, "VZATÉ ZAKÁZKY", 12)
+		var active_title: Label = _label(main, "VZATÉ ZAKÁZKY • 20 MIN", 12)
 		active_title.add_theme_color_override("font_color", Color("#d7b17a"))
 		content.add_child(active_title)
 		for contract: Dictionary in active_contracts:
@@ -370,7 +424,8 @@ func _ensure_ui(main: Node, now: int) -> void:
 			var contract_volume: float = float(contract.get("volume_m3", 0.0))
 			var contract_price: int = int(contract.get("price_per_m3", 0))
 			var contract_total: float = contract_volume * float(contract_price)
-			contract_content.add_child(_label(main, "Zakázka #%d • %.1f m³" % [id, contract_volume], 12))
+			var contract_tool: String = str(contract.get("transport_tool", ""))
+			contract_content.add_child(_label(main, "Zakázka #%d • %s • %.1f m³" % [id, _transport_name(contract_tool), contract_volume], 12))
 			contract_content.add_child(_label(main, "%d Kč/m³ • celkem %.0f Kč" % [contract_price, contract_total], 11))
 			var active_label: Label = _label(main, "", 11)
 			active_label.name = "ContractTimer_%d" % id
@@ -407,10 +462,10 @@ func _refresh_countdowns(panel: Node, now: int) -> void:
 func _make_signature() -> String:
 	var offer_part: String = "none:%d" % next_offer_at
 	if not current_offer.is_empty():
-		offer_part = "offer:%s" % str(current_offer.get("id", 0))
+		offer_part = "offer:%s:%s" % [str(current_offer.get("id", 0)), str(current_offer.get("transport_tool", ""))]
 	var active_part: String = ""
 	for contract: Dictionary in active_contracts:
-		active_part += "%s:%.1f|" % [str(contract.get("id", 0)), float(contract.get("delivered_m3", 0.0))]
+		active_part += "%s:%s:%.1f|" % [str(contract.get("id", 0)), str(contract.get("transport_tool", "")), float(contract.get("delivered_m3", 0.0))]
 	return offer_part + "/" + active_part
 
 func _jobs_box(main: Node) -> VBoxContainer:
@@ -452,6 +507,8 @@ func _read_offline_last_seen() -> int:
 	return 0
 
 func _main_state(main: Node) -> Dictionary:
+	if main == null:
+		return {}
 	var value: Variant = main.get("state")
 	if value is Dictionary:
 		return value as Dictionary
@@ -480,14 +537,22 @@ func _load_state() -> void:
 	var offer_value: Variant = data.get("current_offer", {})
 	if offer_value is Dictionary:
 		current_offer = offer_value as Dictionary
+		if not current_offer.is_empty() and str(current_offer.get("transport_tool", "")) == "":
+			current_offer = {}
 	var active_value: Variant = data.get("active_contracts", [])
 	if active_value is Array:
 		active_contracts.clear()
 		var loaded_array: Array = active_value as Array
 		for item: Variant in loaded_array:
 			if item is Dictionary:
-				active_contracts.append(item as Dictionary)
+				var contract: Dictionary = (item as Dictionary).duplicate(true)
+				var accepted_at: int = int(contract.get("accepted_at", 0))
+				if accepted_at > 0:
+					contract["expires_at"] = accepted_at + ACTIVE_LIFETIME
+				active_contracts.append(contract)
 	next_offer_at = int(data.get("next_offer_at", 0))
+	if current_offer.is_empty() and next_offer_at <= 0:
+		next_offer_at = _now() + 1
 	next_id = maxi(1, int(data.get("next_id", 1)))
 
 func _label(main: Node, text_value: String, size: int) -> Label:
