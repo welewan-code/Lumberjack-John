@@ -625,6 +625,27 @@ func _build_left(main: Node) -> PanelContainer:
 	storage_label = _label(main, "0.000 / 10.0 m³", 15)
 	box.add_child(storage_label)
 	box.add_child(_label(main, "Jeden společný sklad pro klády, špalky i štípané dřevo.", 13))
+
+	var wage_title: Label = _label(main, "MZDY", 17)
+	wage_title.add_theme_color_override("font_color", Color("#ffca42"))
+	box.add_child(wage_title)
+	var active_splitters: int = 0
+	var active_sawyers: int = 0
+	for slot_value: Variant in _work_slots(_state(main)):
+		var slot: Dictionary = slot_value as Dictionary
+		if str(slot.get("mode", "player")) != "employee" or not bool(slot.get("active", false)):
+			continue
+		match _tool_role(str(slot.get("tool", ""))):
+			"splitter": active_splitters += 1
+			"sawyer": active_sawyers += 1
+	var splitter_hourly: float = float(active_splitters) * SPLITTER_WAGE_PER_10_MIN * 6.0
+	var sawyer_hourly: float = float(active_sawyers) * SAWYER_WAGE_PER_10_MIN * 6.0
+	box.add_child(_label(main, "Štípači: %d × 900 Kč/h" % active_splitters, 13))
+	box.add_child(_label(main, "Řezači: %d × 1 200 Kč/h" % active_sawyers, 13))
+	var wage_total: Label = _label(main, "CELKEM: %.0f Kč/h" % (splitter_hourly + sawyer_hourly), 15)
+	wage_total.add_theme_color_override("font_color", Color("#ffca42"))
+	box.add_child(wage_total)
+
 	var spacer: Control = Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(spacer)
