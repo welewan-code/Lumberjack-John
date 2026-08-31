@@ -4,8 +4,9 @@ const SMELINAR_PRICE_PER_M3: float = 900.0
 const STORAGE_CAPACITY: float = 10.0
 const CHOP_IN_M3: float = 0.010
 const CHOP_OUT_M3: float = 0.015
-const SPLITTER_WAGE: float = 2.0
-const SAWYER_WAGE: float = 5.0
+const SPLITTER_WAGE_PER_10_MIN: float = 150.0
+const SAWYER_WAGE_PER_10_MIN: float = 200.0
+const WAGE_PERIOD_SECONDS: float = 600.0
 const SAW_IN_M3: float = 0.025
 const SAW_OUT_M3: float = 0.033
 const SPLITTER_TIME_WOODEN: float = 1.8
@@ -273,7 +274,7 @@ func _show_slot_panel(slot_index: int) -> void:
 
 		box.add_child(_label(main, "Činnost: %s" % _tool_role_name(tool_id), 15))
 		if tool_id != "":
-			box.add_child(_label(main, "Cyklus: %.1f s  •  Mzda: %.0f Kč / cyklus" % [_tool_cycle_time(tool_id), _tool_wage(tool_id)], 13))
+			box.add_child(_label(main, "Cyklus: %.1f s  •  Mzda: %.0f Kč / 10 min" % [_tool_cycle_time(tool_id), _tool_wage(tool_id)], 13))
 
 		var toggle: Button = Button.new()
 		toggle.text = "ZASTAVIT PRÁCI" if active else "SPUSTIT PRÁCI"
@@ -534,7 +535,10 @@ func _tool_cycle_time(tool_id: String) -> float:
 		_: return 0.0
 
 func _tool_wage(tool_id: String) -> float:
-	return SAWYER_WAGE if _tool_role(tool_id) == "sawyer" else SPLITTER_WAGE
+	return SAWYER_WAGE_PER_10_MIN if _tool_role(tool_id) == "sawyer" else SPLITTER_WAGE_PER_10_MIN
+
+func _tool_cycle_wage(tool_id: String) -> float:
+	return _tool_wage(tool_id) * _tool_cycle_time(tool_id) / WAGE_PERIOD_SECONDS
 
 func _process_workers(main: Node, delta: float) -> void:
 	var state: Dictionary = _state(main)
@@ -567,26 +571,28 @@ func _process_workers(main: Node, delta: float) -> void:
 
 func _perform_tool_cycle(state: Dictionary, tool_id: String) -> bool:
 	if _tool_role(tool_id) == "sawyer":
-		return _do_saw_cycle(state)
+		return _do_saw_cycle(state, tool_id)
 	if _tool_role(tool_id) == "splitter":
 		return _do_split_cycle(state, tool_id)
 	return false
 
-func _do_saw_cycle(state: Dictionary) -> bool:
-	if float(state.get("money", 0.0)) < SAWYER_WAGE:
+func _do_saw_cycle(state: Dictionary, tool_id: String) -> bool:
+	var cycle_wage: float = _tool_cycle_wage(tool_id)
+	if float(state.get("money", 0.0)) + 0.0001 < cycle_wage:
 		return false
 	if float(state.get("logs_m3", 0.0)) + 0.0001 < SAW_IN_M3:
 		return false
 	var net_growth: float = SAW_OUT_M3 - SAW_IN_M3
 	if _storage_used(state) + net_growth > STORAGE_CAPACITY + 0.0001:
 		return false
-	state["money"] = float(state.get("money", 0.0)) - SAWYER_WAGE
+	state["money"] = maxf(0.0, float(state.get("money", 0.0)) - cycle_wage)
 	state["logs_m3"] = maxf(0.0, float(state.get("logs_m3", 0.0)) - SAW_IN_M3)
 	state["roundwood_m3"] = float(state.get("roundwood_m3", 0.0)) + SAW_OUT_M3
 	return true
 
 func _do_split_cycle(state: Dictionary, tool_id: String) -> bool:
-	if float(state.get("money", 0.0)) < SPLITTER_WAGE:
+	var cycle_wage: float = _tool_cycle_wage(tool_id)
+	if float(state.get("money", 0.0)) + 0.0001 < cycle_wage:
 		return false
 	var available: float = float(state.get("roundwood_m3", 0.0))
 	if available + 0.0001 < CHOP_IN_M3:
@@ -601,7 +607,7 @@ func _do_split_cycle(state: Dictionary, tool_id: String) -> bool:
 	var net_growth: float = output_amount - input_amount
 	if _storage_used(state) + net_growth > STORAGE_CAPACITY + 0.0001:
 		return false
-	state["money"] = float(state.get("money", 0.0)) - SPLITTER_WAGE
+	state["money"] = maxf(0.0, float(state.get("money", 0.0)) - cycle_wage)
 	state["roundwood_m3"] = maxf(0.0, available - input_amount)
 	state["split_m3"] = float(state.get("split_m3", 0.0)) + output_amount
 	return true
