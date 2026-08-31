@@ -14,9 +14,9 @@ const ITEMS: Dictionary = {
 	"fickars_axe": {"category":"SEKERY", "name":"Štípací sekera Fickars", "price":1800, "asset":"res://assets/tools/fickars_axe.png", "desc":"1,3 s / špalek. 5 % šance: 0,020 m³ → 0,030 m³."},
 	"frame_saw": {"category":"PILY", "name":"Rámová pila", "price":160, "asset":"res://assets/tools/frame_saw.png", "desc":"Ruční pila pro další pracovní činnosti."},
 	"aku_saw": {"category":"PILY", "name":"Aku pila", "price":790, "asset":"res://assets/tools/aku_saw.png", "desc":"Rychlejší elektrická pila."},
-	"wheelbarrow": {"category":"DOPRAVNÍ PROSTŘEDKY", "name":"Kolečko", "price":80, "asset":"res://assets/tools/wheelbarrow.png", "desc":"Odveze 0,1 m³. Nabízí zakázky 0,1–0,5 m³ po 0,1 m³."},
-	"handcart": {"category":"DOPRAVNÍ PROSTŘEDKY", "name":"Trakař", "price":220, "asset":"res://assets/tools/trakar.png", "desc":"Odveze 0,2 m³. Nabízí zakázky 0,1–1,0 m³ po 0,1 m³."},
-	"small_trailer": {"category":"DOPRAVNÍ PROSTŘEDKY", "name":"Malý vozík za auto", "price":3500, "asset":"res://assets/tools/small_trailer.png", "desc":"Odveze 0,5 m³. Nabízí zakázky 0,5–2,5 m³ po 0,5 m³."}
+	"wheelbarrow": {"category":"DOPRAVNÍ PROSTŘEDKY", "name":"Kolečko", "price":80, "asset":"res://assets/tools/wheelbarrow.png", "desc":"Odveze 0,1 m³. Zakázky 0,1–0,5 m³ po 0,1 m³. Po přijetí máš 20 min."},
+	"handcart": {"category":"DOPRAVNÍ PROSTŘEDKY", "name":"Trakař", "price":220, "asset":"res://assets/tools/trakar.png", "desc":"Odveze 0,2 m³. Zakázky 0,1–1,0 m³ po 0,1 m³. Po přijetí máš 20 min."},
+	"small_trailer": {"category":"DOPRAVNÍ PROSTŘEDKY", "name":"Malý vozík za auto", "price":3500, "asset":"res://assets/tools/small_trailer.png", "desc":"Odveze 0,5 m³. Zakázky 0,5–2,5 m³ po 0,5 m³. Po přijetí máš 20 min."}
 }
 
 var current_category: String = "SEKERY"
