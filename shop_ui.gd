@@ -11,6 +11,7 @@ const ITEMS: Dictionary = {
 	"wooden_axe": {"category":"SEKERY", "name":"Tupá sekera", "price":0, "asset":"res://assets/tools/wooden_axe.png", "desc":"Základní pracovní sekera."},
 	"sharpened_axe": {"category":"SEKERY", "name":"Nabroušená sekera", "price":120, "asset":"res://assets/tools/sharpened_axe.png", "desc":"Rychlejší sekání než se základní sekerou."},
 	"checht_axe": {"category":"SEKERY", "name":"Štípací sekera CHECHT", "price":590, "asset":"res://assets/Nástroje/štípací sekera checht.png", "desc":"Štípací rychlost 1,5 s / špalek."},
+	"fickars_axe": {"category":"SEKERY", "name":"Štípací sekera Fickars", "price":1800, "asset":"res://assets/tools/fickars_axe.png", "desc":"1,3 s / špalek. 5 % šance: 0,020 m³ → 0,030 m³."},
 	"frame_saw": {"category":"PILY", "name":"Rámová pila", "price":160, "asset":"res://assets/tools/frame_saw.png", "desc":"Ruční pila pro další pracovní činnosti."},
 	"aku_saw": {"category":"PILY", "name":"Aku pila", "price":790, "asset":"res://assets/tools/aku_saw.png", "desc":"Rychlejší elektrická pila."},
 	"wheelbarrow": {"category":"DOPRAVNÍ PROSTŘEDKY", "name":"Kolečko", "price":80, "asset":"res://assets/tools/wheelbarrow.png", "desc":"Základní přesun materiálu."},
@@ -22,6 +23,7 @@ var category_refresh_id: int = 0
 var inventory: Dictionary = {
 	"sharpened_axe": 0,
 	"checht_axe": 0,
+	"fickars_axe": 0,
 	"frame_saw": 0,
 	"aku_saw": 0,
 	"wheelbarrow": 0,
@@ -100,9 +102,12 @@ func _add_item_card(main:Node,grid:GridContainer,item_id:String,item:Dictionary)
 	var actions:=HBoxContainer.new(); actions.add_theme_constant_override("separation",6); info.add_child(actions)
 	if item_id=="wooden_axe":
 		var equip_start:=Button.new(); equip_start.text="VYBAVIT"; equip_start.size_flags_horizontal=Control.SIZE_EXPAND_FILL; equip_start.custom_minimum_size.y=36; equip_start.pressed.connect(_equip_axe.bind("wooden")); actions.add_child(equip_start)
-	elif item_id=="sharpened_axe" or item_id=="checht_axe":
+	elif item_id=="sharpened_axe" or item_id=="checht_axe" or item_id=="fickars_axe":
 		if owned>0:
-			var equip:=Button.new(); equip.text="VYBAVIT"; equip.size_flags_horizontal=Control.SIZE_EXPAND_FILL; equip.custom_minimum_size.y=36; equip.pressed.connect(_equip_axe.bind("sharpened" if item_id=="sharpened_axe" else "checht")); actions.add_child(equip)
+			var equip_id:String="sharpened"
+			if item_id=="checht_axe": equip_id="checht"
+			elif item_id=="fickars_axe": equip_id="fickars"
+			var equip:=Button.new(); equip.text="VYBAVIT"; equip.size_flags_horizontal=Control.SIZE_EXPAND_FILL; equip.custom_minimum_size.y=36; equip.pressed.connect(_equip_axe.bind(equip_id)); actions.add_child(equip)
 		_add_buy_button(main,actions,item_id,price,owned)
 	else:
 		_add_buy_button(main,actions,item_id,price,owned)
@@ -141,6 +146,7 @@ func _equip_axe(axe_id:String)->void:
 	var required_item:String="wooden_axe"
 	if axe_id=="sharpened":required_item="sharpened_axe"
 	elif axe_id=="checht":required_item="checht_axe"
+	elif axe_id=="fickars":required_item="fickars_axe"
 	if get_owned_item_count(required_item)<=0:return
 	var state:=_main_state(main); state["equipped_axe"]=axe_id; main.set("state",state); main.call("save_game"); _refresh_category()
 
