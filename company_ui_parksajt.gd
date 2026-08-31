@@ -9,8 +9,7 @@ func _populate_slot_tools(main: Node, tools: OptionButton, slot_index: int) -> v
 	var current_tool: String = str((slots[slot_index] as Dictionary).get("tool", ""))
 	tools.add_item("Bez nástroje")
 	tools.set_item_metadata(tools.item_count - 1, "")
-	var tool_ids: Array[String] = TOOL_IDS.duplicate()
-	tool_ids.append(PARKSAJT_TOOL_ID)
+	var tool_ids: Array[String] = ["wooden_axe", "sharpened_axe", "checht_axe", "fickars_axe", "frame_saw", "aku_saw", PARKSAJT_TOOL_ID]
 	for tool_id: String in tool_ids:
 		var owned: int = _owned_tool_count(tool_id)
 		var used_total: int = _assigned_tool_count(slots, tool_id)
