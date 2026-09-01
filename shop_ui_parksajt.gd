@@ -51,11 +51,24 @@ func _render_category(main: Node, host: VBoxContainer) -> void:
 		_add_item_card(main, grid, CHECHT_950_ITEM_ID, CHECHT_950_ITEM)
 		_add_item_card(main, grid, OJELO_MAG_ITEM_ID, OJELO_MAG_ITEM)
 
+func _load_png_direct(asset_path: String) -> Texture2D:
+	if not FileAccess.file_exists(asset_path):
+		return null
+	var file: FileAccess = FileAccess.open(asset_path, FileAccess.READ)
+	if file == null:
+		return null
+	var bytes: PackedByteArray = file.get_buffer(file.get_length())
+	var image: Image = Image.new()
+	var error: Error = image.load_png_from_buffer(bytes)
+	if error != OK or image.is_empty():
+		return null
+	return ImageTexture.create_from_image(image)
+
 func _load_shop_texture(asset_path: String) -> Texture2D:
 	if asset_path == "res://motorová pila Checht 950.png" or asset_path == "res://assets/tools/ojelo_mag_gs400.png":
-		var image: Image = Image.load_from_file(asset_path)
-		if image != null and not image.is_empty():
-			return ImageTexture.create_from_image(image)
+		var direct_texture: Texture2D = _load_png_direct(asset_path)
+		if direct_texture != null:
+			return direct_texture
 	return super._load_shop_texture(asset_path)
 
 func _buy_item(item_id: String) -> void:
