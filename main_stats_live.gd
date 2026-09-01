@@ -9,6 +9,10 @@ var stats_split_value_label: Label = null
 var stats_roundwood_value_label: Label = null
 var property_rent_check_elapsed: float = 0.0
 
+func _ready() -> void:
+	super._ready()
+	call_deferred("_check_first_property_rent")
+
 func show_tab(tab: String) -> void:
 	if tab == "STATISTIKY":
 		achievements_section = "STATISTIKY"
