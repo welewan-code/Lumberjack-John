@@ -2,10 +2,12 @@ extends "res://main_career.gd"
 
 const FIRST_PROPERTY_DEPOSIT: float = 10000.0
 const FIRST_PROPERTY_DAILY_RENT: float = 2000.0
+const FIRST_PROPERTY_RENT_INTERVAL: float = 86400.0
 
 var stats_money_value_label: Label = null
 var stats_split_value_label: Label = null
 var stats_roundwood_value_label: Label = null
+var property_rent_check_elapsed: float = 0.0
 
 func show_tab(tab: String) -> void:
 	if tab == "STATISTIKY":
@@ -17,6 +19,10 @@ func show_tab(tab: String) -> void:
 func _process(delta: float) -> void:
 	super._process(delta)
 	_refresh_statistics_values()
+	property_rent_check_elapsed += delta
+	if property_rent_check_elapsed >= 30.0:
+		property_rent_check_elapsed = 0.0
+		_check_first_property_rent()
 
 func _render_statistics(box: VBoxContainer) -> void:
 	var row:=HBoxContainer.new()
@@ -93,12 +99,13 @@ func _render_properties(box: VBoxContainer) -> void:
 	name_label.add_theme_color_override("font_color",Color("#ffca42"))
 	info.add_child(name_label)
 	info.add_child(make_label("Oplocený provozní prostor s buňkou a místem pro zaměstnance, techniku a manipulaci se dřevem.",14))
-	var price:=make_label("Pronájem: 2 000 Kč / den",16)
+	var price:=make_label("Pronájem: 2 000 Kč / 24 h",16)
 	price.add_theme_color_override("font_color",Color("#ffca42"))
 	info.add_child(price)
 	info.add_child(make_label("Kauce: 10 000 Kč",15))
+	info.add_child(make_label("Kapacita skladu po pronájmu: 40 m³",15))
 	var rent:=Button.new()
-	var rented: bool = bool(state.get("first_property_rented", false))
+	var rented: bool = bool(state.get("first_property_rented", false)) or str(state.get("company_location", "home")) == "first_property"
 	rent.text="PRONAJATO" if rented else "PRONAJMOUT"
 	rent.disabled=rented
 	rent.custom_minimum_size=Vector2(150,40)
@@ -113,10 +120,10 @@ func _show_first_property_confirmation() -> void:
 	var total: float = FIRST_PROPERTY_DEPOSIT + FIRST_PROPERTY_DAILY_RENT
 	var dialog:=ConfirmationDialog.new()
 	dialog.title="Pronájem firemního zázemí"
-	dialog.dialog_text="Pronajmout Firemní zázemí – malý dřevosklad?\n\nKauce: 10 000 Kč\nPrvní den nájmu: 2 000 Kč\nCelkem nyní: 12 000 Kč\n\nPo zřízení firmy se práce přesune z domu do firemního zázemí."
+	dialog.dialog_text="Pronajmout Firemní zázemí – malý dřevosklad?\n\nKauce: 10 000 Kč\nPrvních 24 h nájmu: 2 000 Kč\nCelkem nyní: 12 000 Kč\n\nPronájem zvýší kapacitu skladu na 40 m³. Dalších 2 000 Kč se strhne po každých 24 hodinách."
 	dialog.ok_button_text="PRONAJMOUT ZA %.0f Kč" % total
 	dialog.cancel_button_text="ZRUŠIT"
-	dialog.min_size=Vector2i(520,260)
+	dialog.min_size=Vector2i(520,280)
 	add_child(dialog)
 	dialog.canceled.connect(dialog.queue_free)
 	dialog.confirmed.connect(_confirm_first_property_rental.bind(dialog))
@@ -125,12 +132,35 @@ func _show_first_property_confirmation() -> void:
 func _confirm_first_property_rental(dialog: ConfirmationDialog) -> void:
 	var total: float = FIRST_PROPERTY_DEPOSIT + FIRST_PROPERTY_DAILY_RENT
 	if float(state.get("money",0.0)) < total:
-		dialog.dialog_text="Nemáš dost peněz. Potřebuješ 12 000 Kč na kauci a první den nájmu."
+		dialog.dialog_text="Nemáš dost peněz. Potřebuješ 12 000 Kč na kauci a prvních 24 h nájmu."
 		return
 	state["money"] = float(state.get("money",0.0)) - total
 	state["first_property_rented"] = true
-	state["company_location"] = "first_property"
+	state["first_property_last_rent_time"] = Time.get_unix_time_from_system()
+	if not state.has("company_location"):
+		state["company_location"] = "home"
 	save_game()
 	update_hud()
 	dialog.queue_free()
 	show_tab("PODNIKATEL")
+
+func _check_first_property_rent() -> void:
+	var rented: bool = bool(state.get("first_property_rented", false)) or str(state.get("company_location", "home")) == "first_property"
+	if not rented:
+		return
+	if not bool(state.get("first_property_rented", false)):
+		state["first_property_rented"] = true
+	var now: float = Time.get_unix_time_from_system()
+	var last_paid: float = float(state.get("first_property_last_rent_time", 0.0))
+	if last_paid <= 0.0 or last_paid > now:
+		state["first_property_last_rent_time"] = now
+		save_game()
+		return
+	var elapsed: float = now - last_paid
+	var periods: int = int(floor(elapsed / FIRST_PROPERTY_RENT_INTERVAL))
+	if periods <= 0:
+		return
+	state["money"] = float(state.get("money", 0.0)) - FIRST_PROPERTY_DAILY_RENT * float(periods)
+	state["first_property_last_rent_time"] = last_paid + FIRST_PROPERTY_RENT_INTERVAL * float(periods)
+	save_game()
+	update_hud()
