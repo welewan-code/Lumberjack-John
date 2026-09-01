@@ -1,6 +1,6 @@
 [gd_scene load_steps=5 format=3]
 
-[ext_resource path="res://main_statsnav.gd" type="Script" id="1"]
+[ext_resource path="res://main_stats_live.gd" type="Script" id="1"]
 [ext_resource path="res://offline_manager_splitter.gd" type="Script" id="2"]
 [ext_resource path="res://test_mode.gd" type="Script" id="3"]
 [ext_resource path="res://visuals.gd" type="Script" id="4"]
