@@ -2,6 +2,7 @@ extends "res://main.gd"
 
 var career_tab_button: Button
 var entrepreneur_section: String = "OBJEDNÁVKY"
+var achievements_section: String = "ÚSPĚCHY"
 
 func build_bottom(parent: VBoxContainer) -> void:
 	var bar:=HBoxContainer.new()
@@ -44,7 +45,74 @@ func show_tab(tab:String) -> void:
 		if is_instance_valid(right_panel): right_panel.visible = false
 		render_entrepreneur()
 		return
+	if requested == "ÚSPĚCHY":
+		_clear_work_refs()
+		current_tab = "ÚSPĚCHY"
+		clear_content()
+		if is_instance_valid(left_panel): left_panel.visible = false
+		if is_instance_valid(right_panel): right_panel.visible = false
+		render_achievements_hub()
+		return
 	super.show_tab(requested)
+
+func render_achievements_hub() -> void:
+	var panel:=PanelContainer.new()
+	panel.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	panel.size_flags_vertical=Control.SIZE_EXPAND_FILL
+	panel.add_theme_stylebox_override("panel",panel_style("#1b1713","#6b4628",7,1))
+	content_host.add_child(panel)
+	var margin:=MarginContainer.new()
+	margin.add_theme_constant_override("margin_left",16)
+	margin.add_theme_constant_override("margin_right",16)
+	margin.add_theme_constant_override("margin_top",14)
+	margin.add_theme_constant_override("margin_bottom",14)
+	panel.add_child(margin)
+	var root:=VBoxContainer.new()
+	root.add_theme_constant_override("separation",12)
+	margin.add_child(root)
+	var title:=make_label("ÚSPĚCHY",28)
+	title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_color_override("font_color",Color("#ffca42"))
+	root.add_child(title)
+	var tabs:=HBoxContainer.new()
+	tabs.add_theme_constant_override("separation",2)
+	root.add_child(tabs)
+	for section:String in ["ÚSPĚCHY","STATISTIKY"]:
+		var b:=Button.new()
+		b.text=section
+		b.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		b.custom_minimum_size.y=42
+		b.add_theme_font_size_override("font_size",15)
+		if section == achievements_section:
+			b.add_theme_stylebox_override("normal",panel_style("#6b3d1d","#b87935",4,2))
+		else:
+			b.add_theme_stylebox_override("normal",panel_style("#211914","#5f4027",4,1))
+		b.add_theme_stylebox_override("hover",panel_style("#5d3218","#9a632c",4,1))
+		b.pressed.connect(_set_achievements_section.bind(section))
+		tabs.add_child(b)
+	var section_host:=PanelContainer.new()
+	section_host.size_flags_vertical=Control.SIZE_EXPAND_FILL
+	section_host.add_theme_stylebox_override("panel",panel_style("#211914","#5f4027",6,1))
+	root.add_child(section_host)
+	var section_margin:=MarginContainer.new()
+	section_margin.add_theme_constant_override("margin_left",18)
+	section_margin.add_theme_constant_override("margin_right",18)
+	section_margin.add_theme_constant_override("margin_top",18)
+	section_margin.add_theme_constant_override("margin_bottom",18)
+	section_host.add_child(section_margin)
+	var box:=VBoxContainer.new()
+	section_margin.add_child(box)
+	var heading:=make_label(achievements_section,24)
+	heading.add_theme_color_override("font_color",Color("#ffca42"))
+	box.add_child(heading)
+	if achievements_section == "ÚSPĚCHY":
+		box.add_child(make_label("Tady budou herní úspěchy.",16))
+	else:
+		box.add_child(make_label("Tady budou statistiky hráče a firmy.",16))
+
+func _set_achievements_section(section: String) -> void:
+	achievements_section = section
+	show_tab("ÚSPĚCHY")
 
 func _show_quit_job_confirmation() -> void:
 	var dialog:=ConfirmationDialog.new()
