@@ -56,3 +56,52 @@ func _do_split_cycle(state: Dictionary, tool_id: String) -> bool:
 	state["roundwood_m3"] = maxf(0.0, available - CHECHT_SPLITTER_IN_M3)
 	state["split_m3"] = float(state.get("split_m3", 0.0)) + CHECHT_SPLITTER_OUT_M3
 	return true
+
+func _build_left(main: Node) -> PanelContainer:
+	var panel: PanelContainer = super._build_left(main)
+	var margin: MarginContainer = panel.get_child(0) as MarginContainer
+	if margin == null or margin.get_child_count() == 0:
+		return panel
+	var box: VBoxContainer = margin.get_child(0) as VBoxContainer
+	if box == null:
+		return panel
+	var location_title: Label = _label(main, "PRACOVNÍ MÍSTO", 15)
+	location_title.add_theme_color_override("font_color", Color("#ffca42"))
+	box.add_child(location_title)
+	var selector: OptionButton = OptionButton.new()
+	selector.custom_minimum_size.y = 36
+	selector.add_theme_font_size_override("font_size", 13)
+	var state: Dictionary = _state(main)
+	var rented: bool = bool(state.get("first_property_rented", false))
+	if rented:
+		selector.add_item("Domov – provoz ukončen")
+		selector.set_item_metadata(0, "home")
+		selector.set_item_disabled(0, true)
+		selector.add_item("Firemní zázemí – malý dřevosklad")
+		selector.set_item_metadata(1, "first_property")
+		selector.select(1)
+		if str(state.get("company_location", "")) != "first_property":
+			state["company_location"] = "first_property"
+			main.set("state", state)
+			if main.has_method("save_game"):
+				main.call("save_game")
+	else:
+		selector.add_item("Domov")
+		selector.set_item_metadata(0, "home")
+		selector.select(0)
+	selector.item_selected.connect(_on_company_location_selected.bind(main, selector))
+	box.add_child(selector)
+	return panel
+
+func _on_company_location_selected(index: int, main: Node, selector: OptionButton) -> void:
+	if main == null or not is_instance_valid(selector):
+		return
+	var location: String = str(selector.get_item_metadata(index))
+	var state: Dictionary = _state(main)
+	if bool(state.get("first_property_rented", false)) and location == "home":
+		selector.select(1)
+		return
+	state["company_location"] = location
+	main.set("state", state)
+	if main.has_method("save_game"):
+		main.call("save_game")
