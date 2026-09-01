@@ -131,11 +131,15 @@ func _ensure_ui(main: Node, now: int) -> void:
 	content.add_child(separator)
 	var hint: Label = _label(main, "Sousedé si hotové dřevo vyzvednou sami. Prodej probíhá automaticky i offline.", 11)
 	hint.name = "NeighborSelfPickupHint"
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size.x = 0
+	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_child(hint)
 	var button: Button = Button.new()
 	button.name = "NeighborSelfPickupButton"
-	button.custom_minimum_size.y = 34
-	button.add_theme_font_size_override("font_size", 12)
+	button.custom_minimum_size = Vector2(0, 44)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.add_theme_font_size_override("font_size", 11)
 	button.pressed.connect(_toggle_neighbor_self_pickup.bind(button))
 	content.add_child(button)
 	_update_pickup_button(button)
@@ -164,10 +168,10 @@ func _toggle_neighbor_self_pickup(button: Button) -> void:
 
 func _update_pickup_button(button: Button) -> void:
 	if neighbor_self_pickup_enabled:
-		button.text = "VLASTNÍ ODBĚR SOUSEDŮ: POVOLEN"
+		button.text = "VLASTNÍ ODBĚR SOUSEDŮ:\nPOVOLEN"
 		button.tooltip_text = "Sousedé automaticky kupují hotové dřevo do 1 m³ a sami si ho odvezou."
 	else:
-		button.text = "POVOLIT SOUSEDŮM VLASTNÍ ODBĚR DŘEVA"
+		button.text = "POVOLIT SOUSEDŮM VLASTNÍ\nODBĚR DŘEVA"
 		button.tooltip_text = "Kliknutím povolíš automatický vlastní odběr sousedů."
 
 func _save_pickup_setting() -> void:
