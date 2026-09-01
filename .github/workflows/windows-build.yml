@@ -14,6 +14,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Godot export templates
+        run: |
+          mkdir -p /github/home/.local/share/godot/export_templates/4.3.stable
+          cp -r /root/.local/share/godot/export_templates/4.3.stable/* /github/home/.local/share/godot/export_templates/4.3.stable/
+
       - name: Build Windows EXE
         run: |
           mkdir -p build
