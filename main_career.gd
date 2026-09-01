@@ -3,6 +3,43 @@ extends "res://main.gd"
 var career_tab_button: Button
 var entrepreneur_section: String = "OBJEDNÁVKY"
 var achievements_section: String = "ÚSPĚCHY"
+var stats_last_money: float = 0.0
+var stats_last_roundwood: float = 0.0
+var stats_last_split: float = 0.0
+
+func _ready() -> void:
+	if not state.has("stats_money_earned"):
+		state["stats_money_earned"] = 0.0
+	if not state.has("stats_roundwood_produced"):
+		state["stats_roundwood_produced"] = 0.0
+	if not state.has("stats_split_produced"):
+		state["stats_split_produced"] = 0.0
+	super._ready()
+	if float(state.get("stats_money_earned", 0.0)) <= 0.0 and float(state.get("money", 0.0)) > 0.0:
+		state["stats_money_earned"] = float(state.get("money", 0.0))
+	if float(state.get("stats_roundwood_produced", 0.0)) <= 0.0 and float(state.get("roundwood_m3", 0.0)) > 0.0:
+		state["stats_roundwood_produced"] = float(state.get("roundwood_m3", 0.0))
+	if float(state.get("stats_split_produced", 0.0)) <= 0.0 and float(state.get("split_m3", 0.0)) > 0.0:
+		state["stats_split_produced"] = float(state.get("split_m3", 0.0))
+	stats_last_money = float(state.get("money", 0.0))
+	stats_last_roundwood = float(state.get("roundwood_m3", 0.0))
+	stats_last_split = float(state.get("split_m3", 0.0))
+	save_game()
+
+func _process(delta: float) -> void:
+	super._process(delta)
+	var money_now: float = float(state.get("money", 0.0))
+	var roundwood_now: float = float(state.get("roundwood_m3", 0.0))
+	var split_now: float = float(state.get("split_m3", 0.0))
+	if money_now > stats_last_money + 0.0001:
+		state["stats_money_earned"] = float(state.get("stats_money_earned", 0.0)) + (money_now - stats_last_money)
+	if roundwood_now > stats_last_roundwood + 0.000001:
+		state["stats_roundwood_produced"] = float(state.get("stats_roundwood_produced", 0.0)) + (roundwood_now - stats_last_roundwood)
+	if split_now > stats_last_split + 0.000001:
+		state["stats_split_produced"] = float(state.get("stats_split_produced", 0.0)) + (split_now - stats_last_split)
+	stats_last_money = money_now
+	stats_last_roundwood = roundwood_now
+	stats_last_split = split_now
 
 func build_bottom(parent: VBoxContainer) -> void:
 	var bar:=HBoxContainer.new()
@@ -101,6 +138,7 @@ func render_achievements_hub() -> void:
 	section_margin.add_theme_constant_override("margin_bottom",18)
 	section_host.add_child(section_margin)
 	var box:=VBoxContainer.new()
+	box.add_theme_constant_override("separation",12)
 	section_margin.add_child(box)
 	var heading:=make_label(achievements_section,24)
 	heading.add_theme_color_override("font_color",Color("#ffca42"))
@@ -108,7 +146,38 @@ func render_achievements_hub() -> void:
 	if achievements_section == "ÚSPĚCHY":
 		box.add_child(make_label("Tady budou herní úspěchy.",16))
 	else:
-		box.add_child(make_label("Tady budou statistiky hráče a firmy.",16))
+		_render_statistics(box)
+
+func _render_statistics(box: VBoxContainer) -> void:
+	var row:=HBoxContainer.new()
+	row.add_theme_constant_override("separation",12)
+	box.add_child(row)
+	_add_stat_card(row, "VYDĚLÁNO PENĚZ", "%.0f Kč" % float(state.get("stats_money_earned", 0.0)))
+	_add_stat_card(row, "VYROBENO ŠTÍPANÉHO DŘEVA", "%.3f m³" % float(state.get("stats_split_produced", 0.0)))
+	_add_stat_card(row, "VYROBENO ŠPALKŮ", "%.3f m³" % float(state.get("stats_roundwood_produced", 0.0)))
+
+func _add_stat_card(parent: HBoxContainer, label_text: String, value_text: String) -> void:
+	var card:=PanelContainer.new()
+	card.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	card.custom_minimum_size.y=120
+	card.add_theme_stylebox_override("panel",panel_style("#1a1714","#8a572b",6,1))
+	parent.add_child(card)
+	var margin:=MarginContainer.new()
+	margin.add_theme_constant_override("margin_left",14)
+	margin.add_theme_constant_override("margin_right",14)
+	margin.add_theme_constant_override("margin_top",12)
+	margin.add_theme_constant_override("margin_bottom",12)
+	card.add_child(margin)
+	var content:=VBoxContainer.new()
+	content.alignment=BoxContainer.ALIGNMENT_CENTER
+	margin.add_child(content)
+	var label:=make_label(label_text,14)
+	label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	content.add_child(label)
+	var value:=make_label(value_text,25)
+	value.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	value.add_theme_color_override("font_color",Color("#ffca42"))
+	content.add_child(value)
 
 func _set_achievements_section(section: String) -> void:
 	achievements_section = section
