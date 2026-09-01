@@ -1,5 +1,8 @@
 extends "res://main_career.gd"
 
+const FIRST_PROPERTY_DEPOSIT: float = 10000.0
+const FIRST_PROPERTY_DAILY_RENT: float = 2000.0
+
 var stats_money_value_label: Label = null
 var stats_split_value_label: Label = null
 var stats_roundwood_value_label: Label = null
@@ -55,3 +58,79 @@ func _refresh_statistics_values() -> void:
 		stats_split_value_label.text = "%.3f m³" % float(state.get("stats_split_produced", 0.0))
 	if is_instance_valid(stats_roundwood_value_label):
 		stats_roundwood_value_label.text = "%.3f m³" % float(state.get("stats_roundwood_produced", 0.0))
+
+func _render_properties(box: VBoxContainer) -> void:
+	var h:=make_label("NEMOVITOSTI",24)
+	h.add_theme_color_override("font_color",Color("#ffca42"))
+	box.add_child(h)
+	box.add_child(make_label("Pronájmy a nabídky provozních pozemků a areálů.",15))
+	var card:=PanelContainer.new()
+	card.add_theme_stylebox_override("panel",panel_style("#1a1714","#8a572b",6,1))
+	box.add_child(card)
+	var m:=MarginContainer.new()
+	m.add_theme_constant_override("margin_left",12)
+	m.add_theme_constant_override("margin_right",12)
+	m.add_theme_constant_override("margin_top",10)
+	m.add_theme_constant_override("margin_bottom",10)
+	card.add_child(m)
+	var row:=HBoxContainer.new()
+	row.add_theme_constant_override("separation",14)
+	m.add_child(row)
+	var preview:=PanelContainer.new()
+	preview.custom_minimum_size=Vector2(150,82)
+	preview.add_theme_stylebox_override("panel",panel_style("#2b241d","#6b4628",4,1))
+	row.add_child(preview)
+	var preview_label:=make_label("FIREMNÍ\nZÁZEMÍ",15)
+	preview_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	preview_label.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
+	preview_label.add_theme_color_override("font_color",Color("#cdbb9b"))
+	preview.add_child(preview_label)
+	var info:=VBoxContainer.new()
+	info.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	info.add_theme_constant_override("separation",4)
+	row.add_child(info)
+	var name_label:=make_label("Firemní zázemí – malý dřevosklad",18)
+	name_label.add_theme_color_override("font_color",Color("#ffca42"))
+	info.add_child(name_label)
+	info.add_child(make_label("Oplocený provozní prostor s buňkou a místem pro zaměstnance, techniku a manipulaci se dřevem.",14))
+	var price:=make_label("Pronájem: 2 000 Kč / den",16)
+	price.add_theme_color_override("font_color",Color("#ffca42"))
+	info.add_child(price)
+	info.add_child(make_label("Kauce: 10 000 Kč",15))
+	var rent:=Button.new()
+	var rented: bool = bool(state.get("first_property_rented", false))
+	rent.text="PRONAJATO" if rented else "PRONAJMOUT"
+	rent.disabled=rented
+	rent.custom_minimum_size=Vector2(150,40)
+	rent.add_theme_font_size_override("font_size",14)
+	rent.add_theme_stylebox_override("normal",panel_style("#315c1c","#5f9631",5,1))
+	rent.add_theme_stylebox_override("hover",panel_style("#3d7124","#78b644",5,1))
+	if not rented:
+		rent.pressed.connect(_show_first_property_confirmation)
+	row.add_child(rent)
+
+func _show_first_property_confirmation() -> void:
+	var total: float = FIRST_PROPERTY_DEPOSIT + FIRST_PROPERTY_DAILY_RENT
+	var dialog:=ConfirmationDialog.new()
+	dialog.title="Pronájem firemního zázemí"
+	dialog.dialog_text="Pronajmout Firemní zázemí – malý dřevosklad?\n\nKauce: 10 000 Kč\nPrvní den nájmu: 2 000 Kč\nCelkem nyní: 12 000 Kč\n\nPo zřízení firmy se práce přesune z domu do firemního zázemí."
+	dialog.ok_button_text="PRONAJMOUT ZA %.0f Kč" % total
+	dialog.cancel_button_text="ZRUŠIT"
+	dialog.min_size=Vector2i(520,260)
+	add_child(dialog)
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.confirmed.connect(_confirm_first_property_rental.bind(dialog))
+	dialog.popup_centered()
+
+func _confirm_first_property_rental(dialog: ConfirmationDialog) -> void:
+	var total: float = FIRST_PROPERTY_DEPOSIT + FIRST_PROPERTY_DAILY_RENT
+	if float(state.get("money",0.0)) < total:
+		dialog.dialog_text="Nemáš dost peněz. Potřebuješ 12 000 Kč na kauci a první den nájmu."
+		return
+	state["money"] = float(state.get("money",0.0)) - total
+	state["first_property_rented"] = true
+	state["company_location"] = "first_property"
+	save_game()
+	update_hud()
+	dialog.queue_free()
+	show_tab("PODNIKATEL")
