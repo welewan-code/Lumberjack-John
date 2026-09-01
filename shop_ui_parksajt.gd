@@ -25,7 +25,7 @@ const OJELO_MAG_ITEM: Dictionary = {
 	"name": "Motorová pila Ojelo Mag GS400",
 	"price": 5500,
 	"asset": "res://assets/tools/ojelo_mag_gs400.png",
-	"desc": "Motorová pila Ojelo Mag GS400 • 35 cm lišta • řezání 8 s."
+	"desc": "Motorová pila Ojelo Mag GS400 • 35 cm lišta • +9 % větší průřez na cyklus • řezání 8 s."
 }
 
 func _ready() -> void:
