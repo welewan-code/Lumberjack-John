@@ -6,6 +6,7 @@ const OJELO_MAG_TOOL_ID: String = "ojelo_mag_gs400_saw"
 const PARKSAJT_SAW_TIME: float = 12.0
 const CHECHT_950_SAW_TIME: float = 10.0
 const OJELO_MAG_SAW_TIME: float = 8.0
+const EMPLOYEE_AXE_HANDLING_TIME: float = 2.0
 
 func _populate_slot_tools(main: Node, tools: OptionButton, slot_index: int) -> void:
 	var state: Dictionary = _state(main)
@@ -51,4 +52,7 @@ func _tool_cycle_time(tool_id: String) -> float:
 		return CHECHT_950_SAW_TIME
 	if tool_id == OJELO_MAG_TOOL_ID:
 		return OJELO_MAG_SAW_TIME
-	return super._tool_cycle_time(tool_id)
+	var base_time: float = super._tool_cycle_time(tool_id)
+	if super._tool_role(tool_id) == "splitter":
+		return base_time + EMPLOYEE_AXE_HANDLING_TIME
+	return base_time
