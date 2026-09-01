@@ -112,12 +112,10 @@ func render_entrepreneur() -> void:
 	var root:=VBoxContainer.new()
 	root.add_theme_constant_override("separation",12)
 	margin.add_child(root)
-
 	var title:=make_label("PODNIKATEL",28)
 	title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_color_override("font_color",Color("#ffca42"))
 	root.add_child(title)
-
 	var tabs:=HBoxContainer.new()
 	tabs.add_theme_constant_override("separation",2)
 	root.add_child(tabs)
@@ -134,7 +132,6 @@ func render_entrepreneur() -> void:
 		b.add_theme_stylebox_override("hover",panel_style("#5d3218","#9a632c",4,1))
 		b.pressed.connect(_set_entrepreneur_section.bind(section))
 		tabs.add_child(b)
-
 	var section_host:=PanelContainer.new()
 	section_host.size_flags_vertical=Control.SIZE_EXPAND_FILL
 	section_host.add_theme_stylebox_override("panel",panel_style("#211914","#5f4027",6,1))
@@ -146,7 +143,6 @@ func render_entrepreneur() -> void:
 	section_margin.add_theme_constant_override("margin_bottom",18)
 	section_host.add_child(section_margin)
 	_render_entrepreneur_section(section_margin)
-
 	var bottom:=HBoxContainer.new()
 	root.add_child(bottom)
 	var spacer:=Control.new()
@@ -213,7 +209,7 @@ func _render_orders_draft(box: VBoxContainer) -> void:
 		name_label.add_theme_color_override("font_color",Color("#ffca42"))
 		info.add_child(name_label)
 		info.add_child(make_label(str(order["amount"]),15))
-		info.add_child(make_label(str(order["term"]]),13))
+		info.add_child(make_label(str(order["term"]),13))
 		var price:=make_label(str(order["price"]),18)
 		price.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
 		row.add_child(price)
