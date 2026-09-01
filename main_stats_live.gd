@@ -1,8 +1,15 @@
-extends "res://main_statsnav.gd"
+extends "res://main_career.gd"
 
 var stats_money_value_label: Label = null
 var stats_split_value_label: Label = null
 var stats_roundwood_value_label: Label = null
+
+func show_tab(tab: String) -> void:
+	if tab == "STATISTIKY":
+		achievements_section = "STATISTIKY"
+		super.show_tab("ÚSPĚCHY")
+		return
+	super.show_tab(tab)
 
 func _process(delta: float) -> void:
 	super._process(delta)
