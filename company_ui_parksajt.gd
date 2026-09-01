@@ -6,6 +6,8 @@ const OJELO_MAG_TOOL_ID: String = "ojelo_mag_gs400_saw"
 const PARKSAJT_SAW_TIME: float = 12.0
 const CHECHT_950_SAW_TIME: float = 10.0
 const OJELO_MAG_SAW_TIME: float = 8.0
+const OJELO_MAG_SAW_IN_M3: float = 0.027
+const OJELO_MAG_SAW_OUT_M3: float = 0.036
 const EMPLOYEE_AXE_HANDLING_TIME: float = 2.0
 
 func _populate_slot_tools(main: Node, tools: OptionButton, slot_index: int) -> void:
@@ -56,3 +58,19 @@ func _tool_cycle_time(tool_id: String) -> float:
 	if super._tool_role(tool_id) == "splitter":
 		return base_time + EMPLOYEE_AXE_HANDLING_TIME
 	return base_time
+
+func _do_saw_cycle(state: Dictionary, tool_id: String) -> bool:
+	if tool_id != OJELO_MAG_TOOL_ID:
+		return super._do_saw_cycle(state, tool_id)
+	var cycle_wage: float = _tool_cycle_wage(tool_id)
+	if float(state.get("money", 0.0)) + 0.0001 < cycle_wage:
+		return false
+	if float(state.get("logs_m3", 0.0)) + 0.0001 < OJELO_MAG_SAW_IN_M3:
+		return false
+	var net_growth: float = OJELO_MAG_SAW_OUT_M3 - OJELO_MAG_SAW_IN_M3
+	if _storage_used(state) + net_growth > STORAGE_CAPACITY + 0.0001:
+		return false
+	state["money"] = maxf(0.0, float(state.get("money", 0.0)) - cycle_wage)
+	state["logs_m3"] = maxf(0.0, float(state.get("logs_m3", 0.0)) - OJELO_MAG_SAW_IN_M3)
+	state["roundwood_m3"] = float(state.get("roundwood_m3", 0.0)) + OJELO_MAG_SAW_OUT_M3
+	return true
