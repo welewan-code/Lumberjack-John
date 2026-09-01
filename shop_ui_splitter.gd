@@ -6,7 +6,7 @@ const CHECHT_SPLITTER_ITEM: Dictionary = {
 	"name": "Štípačka CHECHT – 4 klín",
 	"price": 11990,
 	"asset": "res://assets/tools/checht_splitter.png",
-	"desc": "Cyklus 3,5 s • 0,040 m³ špalků → 0,080 m³ štípaného • 4 klín."
+	"desc": "Cyklus 8 s • 0,040 m³ špalků → 0,060 m³ štípaného • 4 klín."
 }
 
 func _ready() -> void:
