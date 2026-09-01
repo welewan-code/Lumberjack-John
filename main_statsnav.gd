@@ -1,4 +1,4 @@
-extends "res://main_career.gd"
+extends "res://main_stats_live.gd"
 
 func show_tab(tab: String) -> void:
 	if tab == "STATISTIKY":
