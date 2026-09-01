@@ -4,6 +4,7 @@ const CHECHT_SPLITTER_TOOL_ID: String = "checht_splitter_4way"
 const CHECHT_SPLITTER_TIME: float = 8.0
 const CHECHT_SPLITTER_IN_M3: float = 0.040
 const CHECHT_SPLITTER_OUT_M3: float = 0.060
+const FIRST_PROPERTY_BACKGROUND: String = "res://Firemní zázemí 1.png"
 
 func _populate_slot_tools(main: Node, tools: OptionButton, slot_index: int) -> void:
 	super._populate_slot_tools(main, tools, slot_index)
@@ -73,21 +74,14 @@ func _build_left(main: Node) -> PanelContainer:
 	selector.add_theme_font_size_override("font_size", 13)
 	var state: Dictionary = _state(main)
 	var rented: bool = bool(state.get("first_property_rented", false))
+	var current_location: String = str(state.get("company_location", "home"))
+	selector.add_item("Domov")
+	selector.set_item_metadata(0, "home")
 	if rented:
-		selector.add_item("Domov – provoz ukončen")
-		selector.set_item_metadata(0, "home")
-		selector.set_item_disabled(0, true)
 		selector.add_item("Firemní zázemí – malý dřevosklad")
 		selector.set_item_metadata(1, "first_property")
-		selector.select(1)
-		if str(state.get("company_location", "")) != "first_property":
-			state["company_location"] = "first_property"
-			main.set("state", state)
-			if main.has_method("save_game"):
-				main.call("save_game")
+		selector.select(1 if current_location == "first_property" else 0)
 	else:
-		selector.add_item("Domov")
-		selector.set_item_metadata(0, "home")
 		selector.select(0)
 	selector.item_selected.connect(_on_company_location_selected.bind(main, selector))
 	box.add_child(selector)
@@ -98,10 +92,21 @@ func _on_company_location_selected(index: int, main: Node, selector: OptionButto
 		return
 	var location: String = str(selector.get_item_metadata(index))
 	var state: Dictionary = _state(main)
-	if bool(state.get("first_property_rented", false)) and location == "home":
-		selector.select(1)
+	if location == "first_property" and not bool(state.get("first_property_rented", false)):
+		selector.select(0)
 		return
 	state["company_location"] = location
 	main.set("state", state)
 	if main.has_method("save_game"):
 		main.call("save_game")
+	call_deferred("_render_company", main)
+
+func _load_company_background() -> Texture2D:
+	var main: Node = get_tree().current_scene
+	if main != null:
+		var state: Dictionary = _state(main)
+		if str(state.get("company_location", "home")) == "first_property" and ResourceLoader.exists(FIRST_PROPERTY_BACKGROUND):
+			var resource: Resource = ResourceLoader.load(FIRST_PROPERTY_BACKGROUND)
+			if resource is Texture2D:
+				return resource as Texture2D
+	return super._load_company_background()
