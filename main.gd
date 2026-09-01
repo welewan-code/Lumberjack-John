@@ -143,11 +143,24 @@ func build_right(parent: HBoxContainer) -> void:
 	var current:=PanelContainer.new(); current.add_theme_stylebox_override("panel",panel_style("#1a1714","#9a632c",7,2)); box.add_child(current)
 	var cm:=MarginContainer.new(); cm.add_theme_constant_override("margin_left",12); cm.add_theme_constant_override("margin_right",12); cm.add_theme_constant_override("margin_top",12); cm.add_theme_constant_override("margin_bottom",12); current.add_child(cm)
 	var cv:=VBoxContainer.new(); cm.add_child(cv); var h:=make_label("AKTUÁLNÍ PRÁCE",20); h.add_theme_color_override("font_color",Color("#ffca42")); cv.add_child(h); cv.add_child(make_label("Pomocník ve dřevárně",18)); cv.add_child(make_label("Pomocné práce se dřevem.",14)); cv.add_child(make_label("Mzda: 1–3 Kč / sek",14)); cv.add_child(make_label("XP: 1–5 XP / sek",14)); cv.add_child(make_label("Směna: 0/8",14))
-	var quit:=Button.new(); quit.text="ODEJÍT Z PRÁCE"; quit.custom_minimum_size.y=34; quit.add_theme_stylebox_override("normal",panel_style("#597f0d","#7ca620",4,1)); box.add_child(quit)
 	var offer:=PanelContainer.new(); offer.add_theme_stylebox_override("panel",panel_style("#1a1714","#9a632c",7,2)); box.add_child(offer)
 	var ofm:=MarginContainer.new(); ofm.add_theme_constant_override("margin_left",12); ofm.add_theme_constant_override("margin_right",12); ofm.add_theme_constant_override("margin_top",12); ofm.add_theme_constant_override("margin_bottom",12); offer.add_child(ofm)
 	var ofv:=VBoxContainer.new(); ofm.add_child(ofv); var oh:=make_label("NABÍDKA PRÁCE",20); oh.add_theme_color_override("font_color",Color("#ffca42")); ofv.add_child(oh); ofv.add_child(make_label("Skladník dřeva",18)); ofv.add_child(make_label("Práce ve skladu a manipulace\nse dřevem.",14)); ofv.add_child(make_label("Požadovaný level: 1",14)); ofv.add_child(make_label("Mzda: 4–7 Kč",14)); ofv.add_child(make_label("XP: 3–7 XP",14))
 	var accept:=Button.new(); accept.text="PŘIJMOUT PRÁCI"; accept.custom_minimum_size.y=34; accept.add_theme_stylebox_override("normal",panel_style("#597f0d","#7ca620",4,1)); ofv.add_child(accept)
+	var spacer:=Control.new(); spacer.size_flags_vertical=Control.SIZE_EXPAND_FILL; box.add_child(spacer)
+	var quit:=Button.new(); quit.text="ODEJÍT Z PRÁCE"; quit.custom_minimum_size.y=42; quit.add_theme_font_size_override("font_size",15); quit.add_theme_stylebox_override("normal",panel_style("#8f2525","#c94a4a",5,1)); quit.add_theme_stylebox_override("hover",panel_style("#a92e2e","#e35b5b",5,1)); quit.pressed.connect(_show_quit_job_confirmation); box.add_child(quit)
+
+func _show_quit_job_confirmation() -> void:
+	var dialog:=ConfirmationDialog.new()
+	dialog.title="Životní změna"
+	dialog.dialog_text="Opravdu chcete odejít z práce a začít podnikat?\n\nPřijdete o pravidelnou mzdu a stanete se podnikatelem. Příjem bude záviset pouze na vašem podnikání."
+	dialog.ok_button_text="ODEJÍT Z PRÁCE"
+	dialog.cancel_button_text="ZRUŠIT"
+	dialog.min_size=Vector2i(520,220)
+	add_child(dialog)
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.popup_centered()
 
 func build_bottom(parent: VBoxContainer) -> void:
 	var bar:=HBoxContainer.new(); bar.custom_minimum_size.y=58; bar.add_theme_constant_override("separation",1); parent.add_child(bar)
