@@ -1,9 +1,9 @@
 extends "res://offline_manager_parksajt.gd"
 
 const CHECHT_SPLITTER_TOOL_ID: String = "checht_splitter_4way"
-const CHECHT_SPLITTER_TIME: float = 3.5
+const CHECHT_SPLITTER_TIME: float = 8.0
 const CHECHT_SPLITTER_IN_M3: float = 0.040
-const CHECHT_SPLITTER_OUT_M3: float = 0.080
+const CHECHT_SPLITTER_OUT_M3: float = 0.060
 
 func _tool_role(tool_id: String) -> String:
 	if tool_id == CHECHT_SPLITTER_TOOL_ID:
