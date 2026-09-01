@@ -1,4 +1,4 @@
-extends "res://main_career.gd"
+extends "res://main_statsnav.gd"
 
 var stats_money_value_label: Label = null
 var stats_split_value_label: Label = null
