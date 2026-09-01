@@ -307,9 +307,55 @@ func _render_entrepreneur_section(host: MarginContainer) -> void:
 	elif entrepreneur_section == "MARKETING":
 		_render_business_placeholder(box,"MARKETING","Tady budou reklamní kampaně a rozpočet na propagaci.\nInvestice do reklamy bude zvyšovat počet příchozích objednávek.")
 	elif entrepreneur_section == "NEMOVITOSTI":
-		_render_business_placeholder(box,"NEMOVITOSTI","Tady budou pronájmy a později nákup dalších provozních pozemků a areálů.")
+		_render_properties(box)
 	else:
 		_render_business_placeholder(box,"FINANCE","Přehled příjmů a nákladů firmy.\nPozději zde budou také půjčky a jejich splátky.")
+
+func _render_properties(box: VBoxContainer) -> void:
+	var h:=make_label("NEMOVITOSTI",24)
+	h.add_theme_color_override("font_color",Color("#ffca42"))
+	box.add_child(h)
+	box.add_child(make_label("Pronájmy a nabídky provozních pozemků a areálů.",15))
+	var card:=PanelContainer.new()
+	card.add_theme_stylebox_override("panel",panel_style("#1a1714","#8a572b",6,1))
+	box.add_child(card)
+	var m:=MarginContainer.new()
+	m.add_theme_constant_override("margin_left",12)
+	m.add_theme_constant_override("margin_right",12)
+	m.add_theme_constant_override("margin_top",10)
+	m.add_theme_constant_override("margin_bottom",10)
+	card.add_child(m)
+	var row:=HBoxContainer.new()
+	row.add_theme_constant_override("separation",14)
+	m.add_child(row)
+	var preview:=PanelContainer.new()
+	preview.custom_minimum_size=Vector2(150,82)
+	preview.add_theme_stylebox_override("panel",panel_style("#2b241d","#6b4628",4,1))
+	row.add_child(preview)
+	var preview_label:=make_label("FIREMNÍ\nZÁZEMÍ",15)
+	preview_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	preview_label.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
+	preview_label.add_theme_color_override("font_color",Color("#cdbb9b"))
+	preview.add_child(preview_label)
+	var info:=VBoxContainer.new()
+	info.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	info.add_theme_constant_override("separation",4)
+	row.add_child(info)
+	var name_label:=make_label("Firemní zázemí – malý dřevosklad",18)
+	name_label.add_theme_color_override("font_color",Color("#ffca42"))
+	info.add_child(name_label)
+	info.add_child(make_label("Oplocený provozní prostor s buňkou a místem pro zaměstnance, techniku a manipulaci se dřevem.",14))
+	var price:=make_label("Pronájem: 2 000 Kč / den",16)
+	price.add_theme_color_override("font_color",Color("#ffca42"))
+	info.add_child(price)
+	info.add_child(make_label("Kauce: 10 000 Kč",15))
+	var rent:=Button.new()
+	rent.text="PRONAJMOUT"
+	rent.custom_minimum_size=Vector2(150,40)
+	rent.add_theme_font_size_override("font_size",14)
+	rent.add_theme_stylebox_override("normal",panel_style("#315c1c","#5f9631",5,1))
+	rent.add_theme_stylebox_override("hover",panel_style("#3d7124","#78b644",5,1))
+	row.add_child(rent)
 
 func _render_business_placeholder(box: VBoxContainer, heading: String, text: String) -> void:
 	var h:=make_label(heading,24)
