@@ -73,8 +73,13 @@ func _build_left(main: Node) -> PanelContainer:
 	selector.custom_minimum_size.y = 36
 	selector.add_theme_font_size_override("font_size", 13)
 	var state: Dictionary = _state(main)
-	var rented: bool = bool(state.get("first_property_rented", false))
 	var current_location: String = str(state.get("company_location", "home"))
+	var rented: bool = bool(state.get("first_property_rented", false)) or current_location == "first_property"
+	if rented and not bool(state.get("first_property_rented", false)):
+		state["first_property_rented"] = true
+		main.set("state", state)
+		if main.has_method("save_game"):
+			main.call("save_game")
 	selector.add_item("Domov")
 	selector.set_item_metadata(0, "home")
 	if rented:
