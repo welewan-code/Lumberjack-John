@@ -99,38 +99,17 @@ func _build_left(main: Node) -> PanelContainer:
 	if box == null:
 		return panel
 
+	# Parent UI ends with the obsolete manual-splitting description. Remove it;
+	# manual splitting itself stays in the center scene.
+	for _i in range(2):
+		if box.get_child_count() > 0:
+			var obsolete: Node = box.get_child(box.get_child_count() - 1)
+			box.remove_child(obsolete)
+			obsolete.queue_free()
+
 	var state: Dictionary = _state(main)
 	var slots: Array = _work_slots(state)
 	var current_item: String = _player_item_from_equipped(state)
-
-	var player_panel: PanelContainer = PanelContainer.new()
-	player_panel.add_theme_stylebox_override("panel", _style(main, "#171411", "#5f4027", 6, 1))
-	var pm: MarginContainer = MarginContainer.new()
-	pm.add_theme_constant_override("margin_left", 10)
-	pm.add_theme_constant_override("margin_right", 10)
-	pm.add_theme_constant_override("margin_top", 8)
-	pm.add_theme_constant_override("margin_bottom", 8)
-	player_panel.add_child(pm)
-	var pv: VBoxContainer = VBoxContainer.new()
-	pv.add_theme_constant_override("separation", 5)
-	pm.add_child(pv)
-	var title: Label = _label(main, "TVŮJ NÁSTROJ", 13)
-	title.add_theme_color_override("font_color", Color("#ffca42"))
-	pv.add_child(title)
-	var selector: OptionButton = OptionButton.new()
-	selector.custom_minimum_size.y = 34
-	selector.add_theme_font_size_override("font_size", 12)
-	for item_id: String in PLAYER_TOOL_ITEMS:
-		var owned: int = _owned_tool_count(item_id)
-		var assigned: int = _assigned_tool_count(slots, item_id)
-		if item_id != current_item and owned - assigned <= 0:
-			continue
-		selector.add_item(_tool_name(item_id))
-		selector.set_item_metadata(selector.item_count - 1, item_id)
-		if item_id == current_item:
-			selector.select(selector.item_count - 1)
-	selector.item_selected.connect(_on_player_tool_selected.bind(main, selector))
-	pv.add_child(selector)
 
 	var transport_panel: PanelContainer = PanelContainer.new()
 	transport_panel.add_theme_stylebox_override("panel", _style(main, "#171411", "#5f4027", 6, 1))
@@ -163,12 +142,68 @@ func _build_left(main: Node) -> PanelContainer:
 			transport_selector.select(transport_selector.item_count - 1)
 	transport_selector.item_selected.connect(_on_transport_selected.bind(main, transport_selector))
 	tv.add_child(transport_selector)
-
-	var insert_index: int = maxi(0, box.get_child_count() - 2)
-	box.add_child(player_panel)
-	box.move_child(player_panel, insert_index)
 	box.add_child(transport_panel)
-	box.move_child(transport_panel, insert_index)
+
+	var player_panel: PanelContainer = PanelContainer.new()
+	player_panel.add_theme_stylebox_override("panel", _style(main, "#171411", "#5f4027", 6, 1))
+	var pm: MarginContainer = MarginContainer.new()
+	pm.add_theme_constant_override("margin_left", 10)
+	pm.add_theme_constant_override("margin_right", 10)
+	pm.add_theme_constant_override("margin_top", 8)
+	pm.add_theme_constant_override("margin_bottom", 8)
+	player_panel.add_child(pm)
+	var pv: VBoxContainer = VBoxContainer.new()
+	pv.add_theme_constant_override("separation", 5)
+	pm.add_child(pv)
+	var title: Label = _label(main, "TVŮJ NÁSTROJ", 13)
+	title.add_theme_color_override("font_color", Color("#ffca42"))
+	pv.add_child(title)
+	var selector: OptionButton = OptionButton.new()
+	selector.custom_minimum_size.y = 34
+	selector.add_theme_font_size_override("font_size", 12)
+	for item_id: String in PLAYER_TOOL_ITEMS:
+		var owned: int = _owned_tool_count(item_id)
+		var assigned: int = _assigned_tool_count(slots, item_id)
+		if item_id != current_item and owned - assigned <= 0:
+			continue
+		selector.add_item(_tool_name(item_id))
+		selector.set_item_metadata(selector.item_count - 1, item_id)
+		if item_id == current_item:
+			selector.select(selector.item_count - 1)
+	selector.item_selected.connect(_on_player_tool_selected.bind(main, selector))
+	pv.add_child(selector)
+	box.add_child(player_panel)
+
+	var location_panel: PanelContainer = PanelContainer.new()
+	location_panel.add_theme_stylebox_override("panel", _style(main, "#171411", "#5f4027", 6, 1))
+	var lm: MarginContainer = MarginContainer.new()
+	lm.add_theme_constant_override("margin_left", 10)
+	lm.add_theme_constant_override("margin_right", 10)
+	lm.add_theme_constant_override("margin_top", 8)
+	lm.add_theme_constant_override("margin_bottom", 8)
+	location_panel.add_child(lm)
+	var lv: VBoxContainer = VBoxContainer.new()
+	lv.add_theme_constant_override("separation", 5)
+	lm.add_child(lv)
+	var location_title: Label = _label(main, "PRACOVNÍ ZÁZEMÍ", 13)
+	location_title.add_theme_color_override("font_color", Color("#ffca42"))
+	lv.add_child(location_title)
+	var location_selector: OptionButton = OptionButton.new()
+	location_selector.custom_minimum_size.y = 34
+	location_selector.add_theme_font_size_override("font_size", 12)
+	location_selector.add_item("Domov")
+	location_selector.set_item_metadata(0, "home")
+	if _property_rented(state):
+		location_selector.add_item("Firemní zázemí")
+		location_selector.set_item_metadata(location_selector.item_count - 1, "first_property")
+	var current_location: String = str(state.get("company_location", "home"))
+	for location_index: int in range(location_selector.item_count):
+		if str(location_selector.get_item_metadata(location_index)) == current_location:
+			location_selector.select(location_index)
+			break
+	location_selector.item_selected.connect(_on_company_location_selected.bind(main, location_selector))
+	lv.add_child(location_selector)
+	box.add_child(location_panel)
 	return panel
 
 func _on_player_tool_selected(index: int, main: Node, selector: OptionButton) -> void:
