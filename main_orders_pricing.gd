@@ -68,19 +68,16 @@ func _process_customer_orders(startup: bool) -> void:
 			else:
 				changed = true
 	offers = kept
-
 	var next_at: int = int(state.get("customer_order_next_at", 0))
 	if next_at <= 0:
 		next_at = now + _roll_customer_order_wait_seconds()
 		changed = true
-
 	var safety: int = 0
 	while offers.size() < ORDER_MAX_PENDING and now >= next_at and safety < ORDER_MAX_PENDING:
 		safety += 1
 		offers.append(_make_customer_order(next_at))
 		next_at += _roll_customer_order_wait_seconds()
 		changed = true
-
 	state["customer_order_offers"] = offers
 	state["customer_order_next_at"] = next_at
 	if changed:
@@ -140,10 +137,7 @@ func _wait_range_for_effective_price(price: float) -> Vector2:
 		var b_price: float = float(b["price"])
 		if price <= b_price:
 			var t: float = inverse_lerp(a_price, b_price, price)
-			return Vector2(
-				lerpf(float(a["min"]), float(b["min"]), t),
-				lerpf(float(a["max"]), float(b["max"]), t)
-			)
+			return Vector2(lerpf(float(a["min"]), float(b["min"]), t), lerpf(float(a["max"]), float(b["max"]), t))
 	var last: Dictionary = anchors[anchors.size() - 1]
 	return Vector2(float(last["min"]), float(last["max"]))
 
@@ -151,12 +145,10 @@ func _render_orders_draft(box: VBoxContainer) -> void:
 	var header:=HBoxContainer.new()
 	header.add_theme_constant_override("separation",10)
 	box.add_child(header)
-
 	var h:=make_label("OBJEDNÁVKY",24)
 	h.add_theme_color_override("font_color",Color("#ffca42"))
 	h.custom_minimum_size.x=210
 	header.add_child(h)
-
 	var wood_label:=make_label("Cena za m³ měkké",14)
 	wood_label.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
 	header.add_child(wood_label)
@@ -171,7 +163,6 @@ func _render_orders_draft(box: VBoxContainer) -> void:
 			wood_price.select(wood_price.item_count - 1)
 	wood_price.item_selected.connect(_on_softwood_price_selected.bind(wood_price))
 	header.add_child(wood_price)
-
 	var delivery_label:=make_label("Cena za km",14)
 	delivery_label.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
 	header.add_child(delivery_label)
@@ -186,7 +177,6 @@ func _render_orders_draft(box: VBoxContainer) -> void:
 			delivery_price.select(delivery_price.item_count - 1)
 	delivery_price.item_selected.connect(_on_delivery_price_selected.bind(delivery_price))
 	header.add_child(delivery_price)
-
 	var help:=Button.new()
 	help.text="?"
 	help.custom_minimum_size=Vector2(36,36)
@@ -194,12 +184,10 @@ func _render_orders_draft(box: VBoxContainer) -> void:
 	help.tooltip_text="Cena dřeva a dopravy společně ovlivňují, jak často budou přicházet větší objednávky. Nižší celková cena zvyšuje poptávku, vyšší ji snižuje. Vzdálenost zákazníků je 5–30 km, takže dražší sazba za km se projeví hlavně u vzdálenějších objednávek."
 	help.pressed.connect(_show_order_pricing_help)
 	header.add_child(help)
-
 	var active: Dictionary = state.get("customer_active_order", {}) as Dictionary
 	if not active.is_empty():
 		box.add_child(make_label("Přijatá objednávka",15))
 		_add_active_customer_order_card(box, active)
-
 	box.add_child(make_label("Poptávky zákazníků",15))
 	var offers: Array = state.get("customer_order_offers", []) as Array
 	if offers.is_empty():
@@ -228,10 +216,12 @@ func _add_customer_order_card(box: VBoxContainer, order: Dictionary, now: int, h
 	row.add_child(info)
 	var volume: int = int(order.get("volume_m3", 1))
 	var distance: int = int(order.get("distance_km", 5))
+	var wood_rate: int = int(order.get("wood_price_per_m3", 0))
+	var delivery_rate: int = int(order.get("delivery_price_per_km", 0))
 	var title:=make_label("%d m³ měkkého dřeva" % volume,18)
 	title.add_theme_color_override("font_color",Color("#ffca42"))
 	info.add_child(title)
-	info.add_child(make_label("%d km" % distance,14))
+	info.add_child(make_label("%d km • %d Kč/m³ • %d Kč/km" % [distance, wood_rate, delivery_rate],14))
 	info.add_child(make_label(_order_expiry_text(int(order.get("expires_at", now)), now),13))
 	var total:=make_label("%d Kč" % int(order.get("total_price", 0)),18)
 	total.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
@@ -269,10 +259,12 @@ func _add_active_customer_order_card(box: VBoxContainer, order: Dictionary) -> v
 	var volume: float = float(order.get("volume_m3",0.0))
 	var delivered: float = clampf(float(order.get("delivered_m3",0.0)),0.0,volume)
 	var distance: int = int(order.get("distance_km",0))
+	var wood_rate: int = int(order.get("wood_price_per_m3",0))
+	var delivery_rate: int = int(order.get("delivery_price_per_km",0))
 	var title:=make_label("%.1f / %.1f m³ odvezeno" % [delivered,volume],18)
 	title.add_theme_color_override("font_color",Color("#ffca42"))
 	content.add_child(title)
-	content.add_child(make_label("Zákazník: %d km • Zakázka: %d Kč" % [distance,int(order.get("total_price",0))],14))
+	content.add_child(make_label("Zákazník: %d km • %d Kč/m³ • %d Kč/km • Zakázka: %d Kč" % [distance,wood_rate,delivery_rate,int(order.get("total_price",0))],14))
 	var progress:=ProgressBar.new()
 	progress.max_value=maxf(0.001,volume)
 	progress.value=delivered
@@ -380,7 +372,12 @@ func _reschedule_customer_order_search() -> void:
 func _show_order_pricing_help() -> void:
 	var dialog:=AcceptDialog.new()
 	dialog.title="Ceník a poptávka"
-	dialog.dialog_text="Cena dřeva a dopravy se posuzují dohromady.\n\nNižší celková cena = vyšší šance na objednávku.\nVyšší celková cena = nižší šance na objednávku.\n\nZákazníci jsou vzdálení 5–30 km. Vzdálenost sama o sobě poptávku nesnižuje, ale zvyšuje výslednou cenu dopravy. U větších objednávek se doprava lépe rozpočítá na více m³, u malých vzdálených objednávek bude mít na rozhodnutí zákazníka větší vliv."
+	dialog.dialog_text="Cena dřeva a dopravy se posuzují dohromady.\
+\
+Nižší celková cena = vyšší šance na objednávku.\
+Vyšší celková cena = nižší šance na objednávku.\
+\
+Zákazníci jsou vzdálení 5–30 km. Vzdálenost sama o sobě poptávku nesnižuje, ale zvyšuje výslednou cenu dopravy. U větších objednávek se doprava lépe rozpočítá na více m³, u malých vzdálených objednávek bude mít na rozhodnutí zákazníka větší vliv."
 	dialog.ok_button_text="ROZUMÍM"
 	dialog.min_size=Vector2i(560,300)
 	add_child(dialog)
