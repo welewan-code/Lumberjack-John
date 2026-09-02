@@ -1,6 +1,7 @@
 extends "res://company_ui_splitter.gd"
 
 const PLAYER_TOOL_ITEMS: Array[String] = ["wooden_axe", "sharpened_axe", "checht_axe", "fickars_axe", "frame_saw", "aku_saw", PARKSAJT_TOOL_ID, CHECHT_950_TOOL_ID, OJELO_MAG_TOOL_ID]
+const PLAYER_TRANSPORT_ITEMS: Array[String] = ["wheelbarrow", "handcart", "small_trailer"]
 
 func _player_item_from_equipped(state: Dictionary) -> String:
 	var equipped_tool: String = str(state.get("equipped_player_tool", ""))
@@ -131,9 +132,43 @@ func _build_left(main: Node) -> PanelContainer:
 	selector.item_selected.connect(_on_player_tool_selected.bind(main, selector))
 	pv.add_child(selector)
 
+	var transport_panel: PanelContainer = PanelContainer.new()
+	transport_panel.add_theme_stylebox_override("panel", _style(main, "#171411", "#5f4027", 6, 1))
+	var tm: MarginContainer = MarginContainer.new()
+	tm.add_theme_constant_override("margin_left", 10)
+	tm.add_theme_constant_override("margin_right", 10)
+	tm.add_theme_constant_override("margin_top", 8)
+	tm.add_theme_constant_override("margin_bottom", 8)
+	transport_panel.add_child(tm)
+	var tv: VBoxContainer = VBoxContainer.new()
+	tv.add_theme_constant_override("separation", 5)
+	tm.add_child(tv)
+	var transport_title: Label = _label(main, "TVŮJ VOZÍK", 13)
+	transport_title.add_theme_color_override("font_color", Color("#ffca42"))
+	tv.add_child(transport_title)
+	var transport_selector: OptionButton = OptionButton.new()
+	transport_selector.custom_minimum_size.y = 34
+	transport_selector.add_theme_font_size_override("font_size", 12)
+	transport_selector.add_item("Bez prostředku")
+	transport_selector.set_item_metadata(transport_selector.item_count - 1, "")
+	var current_transport: String = _selected_transport(main)
+	if current_transport == "":
+		transport_selector.select(0)
+	for transport_id: String in PLAYER_TRANSPORT_ITEMS:
+		if _owned_transport(transport_id) <= 0 and transport_id != current_transport:
+			continue
+		transport_selector.add_item(_transport_name(transport_id))
+		transport_selector.set_item_metadata(transport_selector.item_count - 1, transport_id)
+		if transport_id == current_transport:
+			transport_selector.select(transport_selector.item_count - 1)
+	transport_selector.item_selected.connect(_on_transport_selected.bind(main, transport_selector))
+	tv.add_child(transport_selector)
+
 	var insert_index: int = maxi(0, box.get_child_count() - 2)
 	box.add_child(player_panel)
 	box.move_child(player_panel, insert_index)
+	box.add_child(transport_panel)
+	box.move_child(transport_panel, insert_index)
 	return panel
 
 func _on_player_tool_selected(index: int, main: Node, selector: OptionButton) -> void:
@@ -152,3 +187,42 @@ func _on_player_tool_selected(index: int, main: Node, selector: OptionButton) ->
 	if main.has_method("save_game"):
 		main.call("save_game")
 	call_deferred("_render_company", main)
+
+func _selected_transport(main: Node) -> String:
+	var transport: Node = get_node_or_null("/root/TransportUI")
+	if transport != null and transport.has_method("get_selected_transport_tool"):
+		return str(transport.call("get_selected_transport_tool", main))
+	return str(_state(main).get("transport_tool", ""))
+
+func _owned_transport(item_id: String) -> int:
+	var shop: Node = get_node_or_null("/root/ShopUI")
+	if shop == null:
+		return 0
+	var inventory_value: Variant = shop.get("inventory")
+	if inventory_value is Dictionary:
+		return int((inventory_value as Dictionary).get(item_id, 0))
+	return 0
+
+func _transport_name(item_id: String) -> String:
+	match item_id:
+		"wheelbarrow": return "Kolečko – 0,1 m³"
+		"handcart": return "Trakař – 0,2 m³"
+		"small_trailer": return "Malý vozík za auto – 0,5 m³"
+		_: return "Doprava"
+
+func _on_transport_selected(index: int, main: Node, selector: OptionButton) -> void:
+	if main == null or not is_instance_valid(selector):
+		return
+	var transport_id: String = str(selector.get_item_metadata(index))
+	if transport_id != "" and _owned_transport(transport_id) <= 0:
+		return
+	var state: Dictionary = _state(main)
+	state["transport_tool"] = transport_id
+	main.set("state", state)
+	var transport: Node = get_node_or_null("/root/TransportUI")
+	if transport != null:
+		transport.set("saved_transport_tool", transport_id)
+		if transport.has_method("_save_transport_state"):
+			transport.call("_save_transport_state")
+	if main.has_method("save_game"):
+		main.call("save_game")
