@@ -63,34 +63,6 @@ func _render_orders_draft(box: VBoxContainer) -> void:
 	header.add_child(help)
 
 	box.add_child(make_label("Poptávky zákazníků",15))
-	var orders: Array[Dictionary] = [
-		{"name":"Rodinný dům – Kladno","amount":"3,0 m³ štípaného dřeva","price":"6 300 Kč","term":"Termín: 3 dny"},
-		{"name":"Chata – okolí Kladna","amount":"1,5 m³ štípaného dřeva","price":"3 300 Kč","term":"Termín: 2 dny"},
-		{"name":"Menší odběr","amount":"0,5 m³ štípaného dřeva","price":"1 150 Kč","term":"Termín: 1 den"}
-	]
-	for order:Dictionary in orders:
-		var card:=PanelContainer.new()
-		card.add_theme_stylebox_override("panel",panel_style("#1a1714","#8a572b",6,1))
-		box.add_child(card)
-		var m:=MarginContainer.new()
-		m.add_theme_constant_override("margin_left",14)
-		m.add_theme_constant_override("margin_right",14)
-		m.add_theme_constant_override("margin_top",10)
-		m.add_theme_constant_override("margin_bottom",10)
-		card.add_child(m)
-		var row:=HBoxContainer.new()
-		m.add_child(row)
-		var info:=VBoxContainer.new()
-		info.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-		row.add_child(info)
-		var name_label:=make_label(str(order["name"]),18)
-		name_label.add_theme_color_override("font_color",Color("#ffca42"))
-		info.add_child(name_label)
-		info.add_child(make_label(str(order["amount"]),15))
-		info.add_child(make_label(str(order["term"]),13))
-		var price:=make_label(str(order["price"]),18)
-		price.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
-		row.add_child(price)
 
 func _on_softwood_price_selected(index: int, selector: OptionButton) -> void:
 	state["order_softwood_price_per_m3"] = int(selector.get_item_metadata(index))
