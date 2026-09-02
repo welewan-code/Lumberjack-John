@@ -51,6 +51,19 @@ func get_selected_transport_tool(main: Node = null) -> String:
 			return state_tool
 	return saved_transport_tool
 
+func is_customer_order_transport_running() -> bool:
+	return transport_running and transport_running_kind == "customer"
+
+func get_customer_order_transport_remaining_seconds() -> float:
+	if not is_customer_order_transport_running():
+		return 0.0
+	return maxf(0.0, transport_duration - transport_elapsed)
+
+func get_customer_order_transport_delivery_amount() -> float:
+	if not is_customer_order_transport_running():
+		return 0.0
+	return transport_delivery_amount
+
 func _restore_saved_tool(main: Node) -> void:
 	if saved_transport_tool == "":
 		return
