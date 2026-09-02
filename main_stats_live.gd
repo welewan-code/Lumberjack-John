@@ -14,6 +14,34 @@ func _ready() -> void:
 	super._ready()
 	call_deferred("_check_first_property_rent")
 
+func _default_work_slots() -> Array:
+	return [
+		{"mode":"player", "tool":"", "active":false, "employee_role":""},
+		{"mode":"player", "tool":"", "active":false, "employee_role":""},
+		{"mode":"player", "tool":"", "active":false, "employee_role":""},
+		{"mode":"player", "tool":"", "active":false, "employee_role":""},
+		{"mode":"player", "tool":"", "active":false, "employee_role":""}
+	]
+
+func _normalize_work_slots() -> void:
+	var source: Variant = state.get("work_slots", [])
+	var normalized: Array = _default_work_slots()
+	if source is Array:
+		var source_array: Array = source as Array
+		for i in range(mini(5, source_array.size())):
+			var raw_slot: Variant = source_array[i]
+			if raw_slot is Dictionary:
+				var slot: Dictionary = raw_slot as Dictionary
+				var mode: String = "employee" if str(slot.get("mode", "player")) == "employee" else "player"
+				var tool: String = str(slot.get("tool", "")) if mode == "employee" else ""
+				var active: bool = bool(slot.get("active", false)) if mode == "employee" else false
+				var employee_role: String = str(slot.get("employee_role", "")) if mode == "employee" else ""
+				if employee_role == "" and tool != "":
+					var role_from_tool: String = str(CompanyUI.call("_tool_role", tool)) if CompanyUI != null and CompanyUI.has_method("_tool_role") else ""
+					employee_role = role_from_tool
+				normalized[i] = {"mode":mode, "tool":tool, "active":active, "employee_role":employee_role}
+	state["work_slots"] = normalized
+
 func _prepare_property_state_before_load() -> void:
 	var legacy_entrepreneur_without_property_key: bool = false
 	if FileAccess.file_exists(SAVE_PATH):
