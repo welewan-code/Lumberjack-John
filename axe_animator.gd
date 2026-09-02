@@ -6,6 +6,8 @@ extends Node
 
 const WOODEN_AXE_PATH: String = "res://assets/tools/wooden_axe.png"
 const SHARPENED_AXE_PATH: String = "res://assets/tools/sharpened_axe.png"
+const CHECHT_AXE_PATH: String = "res://assets/tools/checht_axe.png"
+const FICKARS_AXE_PATH: String = "res://assets/tools/fickars_axe.png"
 
 var last_equipped: String = ""
 
@@ -45,6 +47,18 @@ func _find_axe(root: Node) -> TextureRect:
 		return found as TextureRect
 	return null
 
+func _load_png_direct(path: String) -> Texture2D:
+	if not FileAccess.file_exists(path):
+		return null
+	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return null
+	var bytes: PackedByteArray = file.get_buffer(file.get_length())
+	var image := Image.new()
+	if image.load_png_from_buffer(bytes) != OK or image.is_empty():
+		return null
+	return ImageTexture.create_from_image(image)
+
 func _update_texture(main: Node, axe: TextureRect) -> void:
 	var equipped: String = "wooden"
 	var state_value = main.get("state")
@@ -55,7 +69,19 @@ func _update_texture(main: Node, axe: TextureRect) -> void:
 		return
 	last_equipped = equipped
 
-	var path: String = SHARPENED_AXE_PATH if equipped == "sharpened" else WOODEN_AXE_PATH
+	var path: String = WOODEN_AXE_PATH
+	match equipped:
+		"sharpened":
+			path = SHARPENED_AXE_PATH
+		"checht":
+			path = CHECHT_AXE_PATH
+		"fickars":
+			path = FICKARS_AXE_PATH
+
+	var direct_texture: Texture2D = _load_png_direct(path)
+	if direct_texture != null:
+		axe.texture = direct_texture
+		return
 	if ResourceLoader.exists(path):
 		var resource := ResourceLoader.load(path)
 		if resource is Texture2D:
