@@ -8,12 +8,12 @@ run/main_scene="res://Main.tscn"
 
 [autoload]
 WorkRewards="*res://work_rewards.gd"
-ShopUI="*res://shop_ui_no_equip.gd"
+ShopUI="*res://shop_ui_medium_trailer.gd"
 AxeAnimator="*res://axe_animator.gd"
 TabRouter="*res://tab_router.gd"
-CompanyUI="*res://company_ui_player_tools.gd"
+CompanyUI="*res://company_ui_medium_trailer.gd"
 ContractManager="*res://contract_manager_pickup.gd"
-TransportUI="*res://transport_ui.gd"
+TransportUI="*res://transport_ui_medium_trailer.gd"
 
 [display]
 window/size/viewport_width=1600
