@@ -163,6 +163,56 @@ func _render_storage(main: Node) -> void:
 	_add_storage_card(main, grid, "KLÁDY", float(state.get("logs_m3", 0.0)))
 	_add_storage_card(main, grid, "ŠPALKY", float(state.get("roundwood_m3", 0.0)))
 	_add_storage_card(main, grid, "ŠTÍPANÉ DŘEVO", float(state.get("split_m3", 0.0)))
+	_add_self_pickup_reserve_control(main, box, state, capacity)
+
+func _add_self_pickup_reserve_control(main: Node, box: VBoxContainer, state: Dictionary, capacity: float) -> void:
+	var reserve_panel: PanelContainer = PanelContainer.new()
+	reserve_panel.add_theme_stylebox_override("panel", _style(main, "#171411", "#79512e", 7, 1))
+	box.add_child(reserve_panel)
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	reserve_panel.add_child(margin)
+	var content: VBoxContainer = VBoxContainer.new()
+	content.add_theme_constant_override("separation", 8)
+	margin.add_child(content)
+	var title: Label = _label(main, "REZERVA PRO VLASTNÍ OBJEDNÁVKY", 17)
+	title.add_theme_color_override("font_color", Color("#ffca42"))
+	content.add_child(title)
+	content.add_child(_label(main, "Sousedské samoodběry nesmí prodat štípané dřevo pod tuto hranici.", 13))
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	content.add_child(row)
+	var reserve_input: SpinBox = SpinBox.new()
+	reserve_input.min_value = 0.0
+	reserve_input.max_value = capacity
+	reserve_input.step = 0.1
+	reserve_input.value = clampf(float(state.get("self_pickup_reserve_m3", 0.0)), 0.0, capacity)
+	reserve_input.suffix = " m³"
+	reserve_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(reserve_input)
+	var save_button: Button = Button.new()
+	save_button.text = "PONECHAT NA SKLADĚ"
+	save_button.custom_minimum_size = Vector2(220, 40)
+	save_button.pressed.connect(_save_self_pickup_reserve.bind(main, reserve_input))
+	row.add_child(save_button)
+	var current: Label = _label(main, "Aktuálně rezervováno: %.1f m³" % float(state.get("self_pickup_reserve_m3", 0.0)), 13)
+	current.name = "SelfPickupReserveCurrent"
+	content.add_child(current)
+
+func _save_self_pickup_reserve(main: Node, reserve_input: SpinBox) -> void:
+	if main == null or not is_instance_valid(reserve_input):
+		return
+	var state: Dictionary = _state(main)
+	var capacity: float = _effective_storage_capacity(state)
+	var reserve: float = clampf(snappedf(float(reserve_input.value), 0.1), 0.0, capacity)
+	state["self_pickup_reserve_m3"] = reserve
+	main.set("state", state)
+	if main.has_method("save_game"):
+		main.call("save_game")
+	call_deferred("_render_storage", main)
 
 func _on_company_location_selected(index: int, main: Node, selector: OptionButton) -> void:
 	if main == null or not is_instance_valid(selector):
