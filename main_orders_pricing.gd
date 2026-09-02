@@ -21,6 +21,8 @@ func _ready() -> void:
 		state["order_softwood_price_per_m3"] = 1250
 	if not state.has("order_delivery_price_per_km"):
 		state["order_delivery_price_per_km"] = 10
+	if not state.has("self_pickup_reserve_m3"):
+		state["self_pickup_reserve_m3"] = 0.0
 	if not state.has("customer_order_offers"):
 		state["customer_order_offers"] = []
 	if not state.has("customer_order_next_at"):
