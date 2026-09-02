@@ -91,31 +91,31 @@ func _build_left(main: Node) -> PanelContainer:
 		main.set("state", state)
 		if main.has_method("save_game"):
 			main.call("save_game")
-	if is_instance_valid(storage_label):
-		storage_label.text = "%.3f / %.1f m³" % [_actual_storage_used(state), _effective_storage_capacity(state)]
-	var location_title: Label = _label(main, "PRACOVNÍ MÍSTO", 15)
-	location_title.add_theme_color_override("font_color", Color("#ffca42"))
-	box.add_child(location_title)
-	var selector: OptionButton = OptionButton.new()
-	selector.custom_minimum_size.y = 36
-	selector.add_theme_font_size_override("font_size", 13)
-	selector.add_item("Domov")
-	selector.set_item_metadata(0, "home")
-	if rented:
-		selector.add_item("Firemní zázemí – malý dřevosklad")
-		selector.set_item_metadata(1, "first_property")
-		selector.select(1 if current_location == "first_property" else 0)
-	else:
-		selector.select(0)
-	selector.item_selected.connect(_on_company_location_selected.bind(main, selector))
-	box.add_child(selector)
+
+	# Left panel is intentionally kept minimal: storage at the top and manual chopping at the bottom.
+	for child: Node in box.get_children():
+		box.remove_child(child)
+		child.queue_free()
+
+	var storage_row: HBoxContainer = HBoxContainer.new()
+	storage_row.add_theme_constant_override("separation", 4)
+	box.add_child(storage_row)
+	storage_label = _label(main, "SKLAD - %.3f/%.1f m³" % [_actual_storage_used(state), _effective_storage_capacity(state)], 17)
+	storage_label.add_theme_color_override("font_color", Color("#ffca42"))
+	storage_row.add_child(storage_label)
+
+	var spacer: Control = Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(spacer)
+	box.add_child(_label(main, "Ruční štípání", 17))
+	box.add_child(_label(main, "0,010 m³ špalků → 0,015 m³ štípaného", 13))
 	return panel
 
 func _refresh_storage_label(main: Node) -> void:
 	if not is_instance_valid(storage_label):
 		return
 	var state: Dictionary = _state(main)
-	storage_label.text = "%.3f / %.1f m³" % [_actual_storage_used(state), _effective_storage_capacity(state)]
+	storage_label.text = "SKLAD - %.3f/%.1f m³" % [_actual_storage_used(state), _effective_storage_capacity(state)]
 
 func _render_storage(main: Node) -> void:
 	var host: MarginContainer = _host(main)
