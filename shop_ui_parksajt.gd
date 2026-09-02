@@ -16,7 +16,7 @@ const CHECHT_950_ITEM: Dictionary = {
 	"category": "PILY",
 	"name": "Motorová pila CHECHT 950",
 	"price": 2600,
-	"asset": "res://motorová pila Checht 950.png",
+	"asset": "res://assets/tools/checht_950.png",
 	"desc": "Motorová pila CHECHT 950 • 30 cm lišta • řezání 10 s."
 }
 
@@ -65,7 +65,7 @@ func _load_png_direct(asset_path: String) -> Texture2D:
 	return ImageTexture.create_from_image(image)
 
 func _load_shop_texture(asset_path: String) -> Texture2D:
-	if asset_path == "res://motorová pila Checht 950.png" or asset_path == "res://assets/tools/ojelo_mag_gs400.png":
+	if asset_path == "res://assets/tools/checht_950.png" or asset_path == "res://assets/tools/ojelo_mag_gs400.png":
 		var direct_texture: Texture2D = _load_png_direct(asset_path)
 		if direct_texture != null:
 			return direct_texture
