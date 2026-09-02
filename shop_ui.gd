@@ -41,9 +41,9 @@ func _render_shop() -> void:
 	var host_value = main.get("content_host")
 	if not (host_value is MarginContainer): return
 	var host := host_value as MarginContainer
-	for child in host.get_children(): child.queue_free()
-	await get_tree().process_frame
-	if not is_instance_valid(host): return
+	for child in host.get_children():
+		host.remove_child(child)
+		child.queue_free()
 	var root := VBoxContainer.new(); root.size_flags_horizontal=Control.SIZE_EXPAND_FILL; root.size_flags_vertical=Control.SIZE_EXPAND_FILL; root.add_theme_constant_override("separation",12); host.add_child(root)
 	var title := _make_label(main,"OBCHOD",28); title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; root.add_child(title)
 	var tabs:=HBoxContainer.new(); tabs.size_flags_horizontal=Control.SIZE_EXPAND_FILL; tabs.add_theme_constant_override("separation",6); root.add_child(tabs)
@@ -169,14 +169,15 @@ func get_owned_item_count(item_id:String)->int:
 	return maxi(0,int(inventory.get(item_id,0)))
 
 func _refresh_category()->void:
-	category_refresh_id+=1; var request_id:int=category_refresh_id; var main:=get_tree().current_scene
+	category_refresh_id+=1
+	var main:=get_tree().current_scene
 	if main==null:return
 	var host:=_find_named_node(main,"ShopCategoryHost")
 	if host is VBoxContainer:
-		for child in host.get_children():child.queue_free()
-		await get_tree().process_frame
-		if request_id!=category_refresh_id:return
-		if is_instance_valid(host):_render_category(main,host as VBoxContainer)
+		for child in host.get_children():
+			host.remove_child(child)
+			child.queue_free()
+		_render_category(main,host as VBoxContainer)
 
 func _owned_count(_main:Node,item_id:String)->int:
 	return get_owned_item_count(item_id)
