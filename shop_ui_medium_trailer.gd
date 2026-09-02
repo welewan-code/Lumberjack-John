@@ -5,7 +5,7 @@ const MEDIUM_TRAILER_ITEM: Dictionary = {
 	"category": "DOPRAVNÍ PROSTŘEDKY",
 	"name": "Střední vozík za auto",
 	"price": 13900,
-	"asset": "res://assets/tools/medium_trailer.svg",
+	"asset": "res://assets/tools/medium_trailer.jpg",
 	"desc": "Odveze 1,0 m³. Náklady na velké objednávky 3 Kč/km."
 }
 
