@@ -213,7 +213,7 @@ func _render_company(main: Node) -> void:
 	chop_button.pressed.connect(_start_chop)
 	chop_button.z_index = 6
 	scene.add_child(chop_button)
-	chop_button.text = "ŠPALEK\nŠTÍPAT SÁM"
+	chop_button.text = "PRACOVAT"
 	chop_button.disabled = false
 
 	var action: PanelContainer = PanelContainer.new()
@@ -230,7 +230,7 @@ func _render_company(main: Node) -> void:
 	action.add_child(am)
 	var av: VBoxContainer = VBoxContainer.new()
 	am.add_child(av)
-	chop_timer = _label(main, "Klikni na štípání", 14)
+	chop_timer = _label(main, "Klikni na PRACOVAT", 14)
 	chop_timer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	av.add_child(chop_timer)
 	chop_progress = ProgressBar.new()
