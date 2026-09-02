@@ -46,7 +46,8 @@ func _buy_item(item_id: String) -> void:
 	_refresh_category()
 
 func _storage_capacity_for_state(state: Dictionary) -> float:
-	return 40.0 if bool(state.get("first_property_rented", false)) else 10.0
+	var has_first_property: bool = bool(state.get("first_property_rented", false)) or str(state.get("company_location", "home")) == "first_property"
+	return 40.0 if has_first_property else 10.0
 
 func _render_wood_buy(main: Node, host: VBoxContainer) -> void:
 	var state: Dictionary = _main_state(main)
