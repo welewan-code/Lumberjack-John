@@ -10,8 +10,26 @@ var stats_roundwood_value_label: Label = null
 var property_rent_check_elapsed: float = 0.0
 
 func _ready() -> void:
+	_prepare_property_state_before_load()
 	super._ready()
 	call_deferred("_check_first_property_rent")
+
+func _prepare_property_state_before_load() -> void:
+	var legacy_entrepreneur_without_property_key: bool = false
+	if FileAccess.file_exists(SAVE_PATH):
+		var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.READ)
+		if file != null:
+			var parsed: Variant = JSON.parse_string(file.get_as_text())
+			if parsed is Dictionary:
+				var saved: Dictionary = parsed as Dictionary
+				legacy_entrepreneur_without_property_key = not saved.has("first_property_rented") and not saved.has("company_location") and not bool(saved.get("employed", true))
+
+	if not state.has("first_property_rented"):
+		state["first_property_rented"] = legacy_entrepreneur_without_property_key
+	if not state.has("company_location"):
+		state["company_location"] = "first_property" if legacy_entrepreneur_without_property_key else "home"
+	if not state.has("first_property_last_rent_time"):
+		state["first_property_last_rent_time"] = Time.get_unix_time_from_system() if legacy_entrepreneur_without_property_key else 0.0
 
 func show_tab(tab: String) -> void:
 	if tab == "STATISTIKY":
