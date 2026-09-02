@@ -1,8 +1,11 @@
 extends "res://company_ui_splitter.gd"
 
-const PLAYER_AXE_ITEMS: Array[String] = ["wooden_axe", "sharpened_axe", "checht_axe", "fickars_axe"]
+const PLAYER_TOOL_ITEMS: Array[String] = ["wooden_axe", "sharpened_axe", "checht_axe", "fickars_axe", "frame_saw", "aku_saw", PARKSAJT_TOOL_ID, CHECHT_950_TOOL_ID, OJELO_MAG_TOOL_ID]
 
 func _player_item_from_equipped(state: Dictionary) -> String:
+	var equipped_tool: String = str(state.get("equipped_player_tool", ""))
+	if equipped_tool != "":
+		return equipped_tool
 	match str(state.get("equipped_axe", "wooden")):
 		"sharpened": return "sharpened_axe"
 		"checht": return "checht_axe"
@@ -116,7 +119,7 @@ func _build_left(main: Node) -> PanelContainer:
 	var selector: OptionButton = OptionButton.new()
 	selector.custom_minimum_size.y = 34
 	selector.add_theme_font_size_override("font_size", 12)
-	for item_id: String in PLAYER_AXE_ITEMS:
+	for item_id: String in PLAYER_TOOL_ITEMS:
 		var owned: int = _owned_tool_count(item_id)
 		var assigned: int = _assigned_tool_count(slots, item_id)
 		if item_id != current_item and owned - assigned <= 0:
@@ -141,7 +144,9 @@ func _on_player_tool_selected(index: int, main: Node, selector: OptionButton) ->
 	var slots: Array = _work_slots(state)
 	if _owned_tool_count(item_id) - _assigned_tool_count(slots, item_id) <= 0 and item_id != _player_item_from_equipped(state):
 		return
-	state["equipped_axe"] = _equipped_from_player_item(item_id)
+	state["equipped_player_tool"] = item_id
+	if item_id in ["wooden_axe", "sharpened_axe", "checht_axe", "fickars_axe"]:
+		state["equipped_axe"] = _equipped_from_player_item(item_id)
 	main.set("state", state)
 	validate_work_slots(main, false)
 	if main.has_method("save_game"):
