@@ -6,15 +6,19 @@ const ORDER_SOFTWOOD_PRICE_STEP: int = 50
 const ORDER_DELIVERY_MIN_PRICE: int = 0
 const ORDER_DELIVERY_MAX_PRICE: int = 30
 const ORDER_DELIVERY_PRICE_STEP: int = 5
-const ORDER_MAX_PENDING: int = 3
+const ORDER_MAX_ACTIVE: int = 3
+const ORDER_MAX_DISPLAYED: int = 5
 const ORDER_MIN_VOLUME_M3: int = 1
 const ORDER_MAX_VOLUME_M3: int = 6
 const ORDER_MIN_DISTANCE_KM: int = 5
 const ORDER_MAX_DISTANCE_KM: int = 30
 const ORDER_MIN_LIFETIME_DAYS: int = 1
 const ORDER_MAX_LIFETIME_DAYS: int = 3
+const CUSTOMER_ORDER_TRAILER_CAPACITY_M3: float = 0.5
+const CUSTOMER_ORDER_SECONDS_PER_KM: float = 10.0
 
 var order_tick_elapsed: float = 0.0
+var active_order_time_labels: Dictionary = {}
 
 func _ready() -> void:
 	if not state.has("order_softwood_price_per_m3"):
@@ -25,6 +29,9 @@ func _ready() -> void:
 		state["self_pickup_reserve_m3"] = 0.0
 	if not state.has("customer_order_offers"):
 		state["customer_order_offers"] = []
+	if not state.has("customer_active_orders"):
+		state["customer_active_orders"] = []
+	# Legacy key kept so older saves with one accepted order migrate cleanly.
 	if not state.has("customer_active_order"):
 		state["customer_active_order"] = {}
 	if not state.has("customer_order_next_at"):
@@ -41,6 +48,7 @@ func _process(delta: float) -> void:
 	if order_tick_elapsed < 1.0:
 		return
 	order_tick_elapsed = 0.0
+	_update_active_order_time_labels()
 	_process_customer_orders(false)
 
 func _normalize_customer_orders() -> void:
@@ -51,9 +59,30 @@ func _normalize_customer_orders() -> void:
 			if item is Dictionary:
 				normalized.append((item as Dictionary).duplicate(true))
 	state["customer_order_offers"] = normalized
-	var active_value: Variant = state.get("customer_active_order", {})
-	state["customer_active_order"] = (active_value as Dictionary).duplicate(true) if active_value is Dictionary else {}
+
+	var active_normalized: Array = []
+	var active_raw: Variant = state.get("customer_active_orders", [])
+	if active_raw is Array:
+		for item: Variant in active_raw:
+			if item is Dictionary and active_normalized.size() < ORDER_MAX_ACTIVE:
+				active_normalized.append((item as Dictionary).duplicate(true))
+	var legacy_active: Variant = state.get("customer_active_order", {})
+	if active_normalized.is_empty() and legacy_active is Dictionary and not (legacy_active as Dictionary).is_empty():
+		active_normalized.append((legacy_active as Dictionary).duplicate(true))
+	state["customer_active_orders"] = active_normalized
+	_sync_legacy_active_order()
 	state["customer_order_next_id"] = maxi(1, int(state.get("customer_order_next_id", 1)))
+
+func _active_orders() -> Array:
+	var value: Variant = state.get("customer_active_orders", [])
+	return value as Array if value is Array else []
+
+func _sync_legacy_active_order() -> void:
+	var active: Array = _active_orders()
+	if active.is_empty():
+		state["customer_active_order"] = {}
+	elif active[0] is Dictionary:
+		state["customer_active_order"] = (active[0] as Dictionary).duplicate(true)
 
 func _process_customer_orders(startup: bool) -> void:
 	var now: int = int(Time.get_unix_time_from_system())
@@ -68,12 +97,18 @@ func _process_customer_orders(startup: bool) -> void:
 			else:
 				changed = true
 	offers = kept
+	var active_count: int = _active_orders().size()
+	var max_offers: int = maxi(0, ORDER_MAX_DISPLAYED - active_count)
+	while offers.size() > max_offers:
+		offers.pop_back()
+		changed = true
+
 	var next_at: int = int(state.get("customer_order_next_at", 0))
 	if next_at <= 0:
 		next_at = now + _roll_customer_order_wait_seconds()
 		changed = true
 	var safety: int = 0
-	while offers.size() < ORDER_MAX_PENDING and now >= next_at and safety < ORDER_MAX_PENDING:
+	while offers.size() < max_offers and now >= next_at and safety < ORDER_MAX_DISPLAYED:
 		safety += 1
 		offers.append(_make_customer_order(next_at))
 		next_at += _roll_customer_order_wait_seconds()
@@ -142,6 +177,9 @@ func _wait_range_for_effective_price(price: float) -> Vector2:
 	return Vector2(float(last["min"]), float(last["max"]))
 
 func _render_orders_draft(box: VBoxContainer) -> void:
+	active_order_time_labels.clear()
+	box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
 	var header:=HBoxContainer.new()
 	header.add_theme_constant_override("separation",10)
 	box.add_child(header)
@@ -184,21 +222,35 @@ func _render_orders_draft(box: VBoxContainer) -> void:
 	help.tooltip_text="Cena dřeva a dopravy společně ovlivňují, jak často budou přicházet větší objednávky. Nižší celková cena zvyšuje poptávku, vyšší ji snižuje. Vzdálenost zákazníků je 5–30 km, takže dražší sazba za km se projeví hlavně u vzdálenějších objednávek."
 	help.pressed.connect(_show_order_pricing_help)
 	header.add_child(help)
-	var active: Dictionary = state.get("customer_active_order", {}) as Dictionary
+
+	var scroll:=ScrollContainer.new()
+	scroll.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO
+	box.add_child(scroll)
+	var list:=VBoxContainer.new()
+	list.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation",12)
+	scroll.add_child(list)
+
+	var active: Array = _active_orders()
 	if not active.is_empty():
-		box.add_child(make_label("Přijatá objednávka",15))
-		_add_active_customer_order_card(box, active)
-	box.add_child(make_label("Poptávky zákazníků",15))
+		list.add_child(make_label("Přijaté objednávky (%d/%d)" % [active.size(), ORDER_MAX_ACTIVE],15))
+		for item: Variant in active:
+			if item is Dictionary:
+				_add_active_customer_order_card(list, item as Dictionary)
+	list.add_child(make_label("Poptávky zákazníků • celkem zobrazeno %d/%d" % [active.size() + (state.get("customer_order_offers", []) as Array).size(), ORDER_MAX_DISPLAYED],15))
 	var offers: Array = state.get("customer_order_offers", []) as Array
 	if offers.is_empty():
-		box.add_child(make_label("Zatím žádná objednávka.",14))
+		list.add_child(make_label("Zatím žádná další objednávka.",14))
 		return
 	var now: int = int(Time.get_unix_time_from_system())
 	for item: Variant in offers:
 		if item is Dictionary:
-			_add_customer_order_card(box, item as Dictionary, now, not active.is_empty())
+			_add_customer_order_card(list, item as Dictionary, now, active.size() >= ORDER_MAX_ACTIVE)
 
-func _add_customer_order_card(box: VBoxContainer, order: Dictionary, now: int, has_active: bool) -> void:
+func _add_customer_order_card(box: VBoxContainer, order: Dictionary, now: int, active_full: bool) -> void:
 	var card:=PanelContainer.new()
 	card.add_theme_stylebox_override("panel",panel_style("#1a1714","#8a572b",6,1))
 	box.add_child(card)
@@ -232,9 +284,9 @@ func _add_customer_order_card(box: VBoxContainer, order: Dictionary, now: int, h
 	var accept:=Button.new()
 	accept.text="PŘIJMOUT"
 	accept.custom_minimum_size=Vector2(110,34)
-	accept.disabled=has_active
-	if has_active:
-		accept.tooltip_text="Nejdřív dokonči přijatou objednávku."
+	accept.disabled=active_full
+	if active_full:
+		accept.tooltip_text="Máš už 3 přijaté objednávky."
 	accept.pressed.connect(_accept_customer_order.bind(int(order.get("id",0))))
 	actions.add_child(accept)
 	var reject:=Button.new()
@@ -271,6 +323,9 @@ func _add_active_customer_order_card(box: VBoxContainer, order: Dictionary) -> v
 	progress.show_percentage=false
 	progress.custom_minimum_size.y=14
 	content.add_child(progress)
+	var time_label:=make_label(_active_order_time_text(order),13)
+	content.add_child(time_label)
+	active_order_time_labels[int(order.get("id",0))] = time_label
 	content.add_child(make_label(_active_order_transport_text(order),13))
 
 func _active_order_transport_text(order: Dictionary) -> String:
@@ -284,9 +339,54 @@ func _active_order_transport_text(order: Dictionary) -> String:
 		return "Čeká na štípané dřevo."
 	return "Vozík odváží automaticky • 0,5 m³/cesta • 10 s/km • náklad 2 Kč/km."
 
+func _active_order_time_text(order: Dictionary) -> String:
+	return "Zbývající čas odvozu: %s" % _format_transport_time(_active_order_remaining_seconds(order))
+
+func _active_order_remaining_seconds(order: Dictionary) -> float:
+	var volume: float = float(order.get("volume_m3",0.0))
+	var delivered: float = clampf(float(order.get("delivered_m3",0.0)),0.0,volume)
+	var remaining_volume: float = maxf(0.0, volume - delivered)
+	if remaining_volume <= 0.0001:
+		return 0.0
+	var distance: float = maxf(0.0, float(order.get("distance_km",0.0)))
+	var trip_seconds: float = distance * CUSTOMER_ORDER_SECONDS_PER_KM
+	var trips: int = int(ceil(remaining_volume / CUSTOMER_ORDER_TRAILER_CAPACITY_M3))
+	var total: float = float(trips) * trip_seconds
+	var active: Array = _active_orders()
+	if not active.is_empty() and active[0] is Dictionary and int((active[0] as Dictionary).get("id",0)) == int(order.get("id",0)):
+		var transport: Node = get_node_or_null("/root/TransportUI")
+		if transport != null and transport.has_method("is_customer_order_transport_running") and bool(transport.call("is_customer_order_transport_running")):
+			if transport.has_method("get_customer_order_transport_remaining_seconds"):
+				var current_remaining: float = maxf(0.0, float(transport.call("get_customer_order_transport_remaining_seconds")))
+				return current_remaining + float(maxi(0, trips - 1)) * trip_seconds
+	return total
+
+func _format_transport_time(seconds_value: float) -> String:
+	var seconds: int = maxi(0, int(ceil(seconds_value)))
+	var minutes: int = seconds / 60
+	var rest: int = seconds % 60
+	return "%d:%02d" % [minutes, rest]
+
+func _update_active_order_time_labels() -> void:
+	if active_order_time_labels.is_empty():
+		return
+	var active: Array = _active_orders()
+	var current_ids: Dictionary = {}
+	for item: Variant in active:
+		if item is Dictionary:
+			var order: Dictionary = item as Dictionary
+			var order_id: int = int(order.get("id",0))
+			current_ids[order_id] = true
+			var label_value: Variant = active_order_time_labels.get(order_id)
+			if label_value is Label and is_instance_valid(label_value as Label):
+				(label_value as Label).text = _active_order_time_text(order)
+	for key: Variant in active_order_time_labels.keys():
+		if not current_ids.has(key):
+			active_order_time_labels.erase(key)
+
 func _accept_customer_order(order_id: int) -> void:
-	var active: Dictionary = state.get("customer_active_order", {}) as Dictionary
-	if not active.is_empty():
+	var active: Array = _active_orders()
+	if active.size() >= ORDER_MAX_ACTIVE:
 		return
 	var offers: Array = state.get("customer_order_offers", []) as Array
 	for i: int in range(offers.size()):
@@ -294,10 +394,13 @@ func _accept_customer_order(order_id: int) -> void:
 			var accepted: Dictionary = (offers[i] as Dictionary).duplicate(true)
 			accepted["accepted_at"] = int(Time.get_unix_time_from_system())
 			accepted["delivered_m3"] = 0.0
-			state["customer_active_order"] = accepted
+			active.append(accepted)
+			state["customer_active_orders"] = active
 			offers.remove_at(i)
 			state["customer_order_offers"] = offers
+			_sync_legacy_active_order()
 			save_game()
+			_process_customer_orders(false)
 			_refresh_orders_view()
 			return
 
@@ -309,41 +412,54 @@ func _reject_customer_order(order_id: int) -> void:
 			break
 	state["customer_order_offers"] = offers
 	save_game()
+	_process_customer_orders(false)
 	_refresh_orders_view()
 
 func has_active_customer_order() -> bool:
-	var active: Variant = state.get("customer_active_order", {})
-	return active is Dictionary and not (active as Dictionary).is_empty()
+	return not _active_orders().is_empty()
+
+func get_customer_order_current_id() -> int:
+	var active: Array = _active_orders()
+	if active.is_empty() or not (active[0] is Dictionary):
+		return 0
+	return int((active[0] as Dictionary).get("id",0))
 
 func get_customer_order_delivery_amount(max_amount: float) -> float:
-	var active: Dictionary = state.get("customer_active_order", {}) as Dictionary
-	if active.is_empty():
+	var active: Array = _active_orders()
+	if active.is_empty() or not (active[0] is Dictionary):
 		return 0.0
-	var remaining: float = maxf(0.0, float(active.get("volume_m3",0.0)) - float(active.get("delivered_m3",0.0)))
+	var order: Dictionary = active[0] as Dictionary
+	var remaining: float = maxf(0.0, float(order.get("volume_m3",0.0)) - float(order.get("delivered_m3",0.0)))
 	return minf(max_amount, remaining)
 
 func get_customer_order_distance_km() -> float:
-	var active: Dictionary = state.get("customer_active_order", {}) as Dictionary
-	return float(active.get("distance_km",0.0)) if not active.is_empty() else 0.0
+	var active: Array = _active_orders()
+	if active.is_empty() or not (active[0] is Dictionary):
+		return 0.0
+	return float((active[0] as Dictionary).get("distance_km",0.0))
 
 func register_customer_order_delivery(amount: float) -> Dictionary:
-	var active: Dictionary = state.get("customer_active_order", {}) as Dictionary
-	if active.is_empty() or amount <= 0.0:
+	var active: Array = _active_orders()
+	if active.is_empty() or not (active[0] is Dictionary) or amount <= 0.0:
 		return {"ok":false,"completed":false,"payout":0.0}
-	var volume: float = float(active.get("volume_m3",0.0))
-	var delivered: float = minf(volume, float(active.get("delivered_m3",0.0)) + amount)
-	active["delivered_m3"] = delivered
+	var order: Dictionary = active[0] as Dictionary
+	var volume: float = float(order.get("volume_m3",0.0))
+	var delivered: float = minf(volume, float(order.get("delivered_m3",0.0)) + amount)
+	order["delivered_m3"] = delivered
 	var completed: bool = delivered + 0.0001 >= volume
 	var payout: float = 0.0
 	if completed:
-		payout = float(active.get("total_price",0.0))
+		payout = float(order.get("total_price",0.0))
 		state["money"] = float(state.get("money",0.0)) + payout
-		state["customer_active_order"] = {}
+		active.remove_at(0)
 	else:
-		state["customer_active_order"] = active
+		active[0] = order
+	state["customer_active_orders"] = active
+	_sync_legacy_active_order()
 	if has_method("update_hud"):
 		update_hud()
 	save_game()
+	_process_customer_orders(false)
 	_refresh_orders_view()
 	return {"ok":true,"completed":completed,"payout":payout,"delivered_m3":delivered}
 
