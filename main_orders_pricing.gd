@@ -378,10 +378,13 @@ func _update_active_order_time_labels() -> void:
 			var order_id: int = int(order.get("id",0))
 			current_ids[order_id] = true
 			var label_value: Variant = active_order_time_labels.get(order_id)
-			if label_value is Label and is_instance_valid(label_value as Label):
-				(label_value as Label).text = _active_order_time_text(order)
+			if is_instance_valid(label_value):
+				var label: Label = label_value as Label
+				if label != null:
+					label.text = _active_order_time_text(order)
 	for key: Variant in active_order_time_labels.keys():
-		if not current_ids.has(key):
+		var stored_label: Variant = active_order_time_labels.get(key)
+		if not current_ids.has(key) or not is_instance_valid(stored_label):
 			active_order_time_labels.erase(key)
 
 func _accept_customer_order(order_id: int) -> void:
