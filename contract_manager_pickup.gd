@@ -52,6 +52,14 @@ func _generate_offer(now: int, main: Node) -> void:
 	next_offer_at = 0
 	ui_signature = ""
 
+func _reserved_split_stock(state: Dictionary) -> float:
+	return maxf(0.0, float(state.get("self_pickup_reserve_m3", 0.0)))
+
+func _can_self_pickup(state: Dictionary, volume: float) -> bool:
+	var available: float = float(state.get("split_m3", 0.0))
+	var reserve: float = _reserved_split_stock(state)
+	return available - volume + 0.0001 >= reserve
+
 func _process_self_pickup_offer(main: Node, now: int) -> bool:
 	if not neighbor_self_pickup_enabled or current_offer.is_empty():
 		return false
@@ -59,7 +67,7 @@ func _process_self_pickup_offer(main: Node, now: int) -> bool:
 		return false
 	var volume: float = clampf(float(current_offer.get("volume_m3", 0.0)), PICKUP_MIN_M3, PICKUP_MAX_M3)
 	var state: Dictionary = _main_state(main)
-	if float(state.get("split_m3", 0.0)) + 0.0001 < volume:
+	if not _can_self_pickup(state, volume):
 		return false
 	var price: float = float(current_offer.get("price_per_m3", 0.0))
 	state["split_m3"] = maxf(0.0, float(state.get("split_m3", 0.0)) - volume)
@@ -91,7 +99,7 @@ func _apply_offline_self_pickup(main: Node, last_seen: int, now: int) -> void:
 			break
 		var steps: int = int(round(PICKUP_MAX_M3 / PICKUP_STEP_M3))
 		var volume: float = float(randi_range(1, steps)) * PICKUP_STEP_M3
-		if float(state.get("split_m3", 0.0)) + 0.0001 < volume:
+		if not _can_self_pickup(state, volume):
 			continue
 		var price: float = float(_roll_price())
 		state["split_m3"] = maxf(0.0, float(state.get("split_m3", 0.0)) - volume)
@@ -169,7 +177,7 @@ func _toggle_neighbor_self_pickup(button: Button) -> void:
 func _update_pickup_button(button: Button) -> void:
 	if neighbor_self_pickup_enabled:
 		button.text = "VLASTNÍ ODBĚR SOUSEDŮ:\nPOVOLEN"
-		button.tooltip_text = "Sousedé automaticky kupují hotové dřevo do 1 m³ a sami si ho odvezou."
+		button.tooltip_text = "Sousedé automaticky kupují hotové dřevo do 1 m³, ale nesmí sáhnout do rezervy nastavené ve skladu."
 	else:
 		button.text = "POVOLIT SOUSEDŮM VLASTNÍ\nODBĚR DŘEVA"
 		button.tooltip_text = "Kliknutím povolíš automatický vlastní odběr sousedů."
