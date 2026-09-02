@@ -25,6 +25,8 @@ func _ready() -> void:
 		state["self_pickup_reserve_m3"] = 0.0
 	if not state.has("customer_order_offers"):
 		state["customer_order_offers"] = []
+	if not state.has("customer_active_order"):
+		state["customer_active_order"] = {}
 	if not state.has("customer_order_next_at"):
 		state["customer_order_next_at"] = 0
 	if not state.has("customer_order_next_id"):
@@ -49,6 +51,8 @@ func _normalize_customer_orders() -> void:
 			if item is Dictionary:
 				normalized.append((item as Dictionary).duplicate(true))
 	state["customer_order_offers"] = normalized
+	var active_value: Variant = state.get("customer_active_order", {})
+	state["customer_active_order"] = (active_value as Dictionary).duplicate(true) if active_value is Dictionary else {}
 	state["customer_order_next_id"] = maxi(1, int(state.get("customer_order_next_id", 1)))
 
 func _process_customer_orders(startup: bool) -> void:
@@ -81,8 +85,8 @@ func _process_customer_orders(startup: bool) -> void:
 	state["customer_order_next_at"] = next_at
 	if changed:
 		save_game()
-		if not startup and current_tab == "PODNIKATEL" and entrepreneur_section == "OBJEDNÁVKY":
-			show_tab("PODNIKATEL")
+		if not startup:
+			_refresh_orders_view()
 
 func _make_customer_order(created_at: int) -> Dictionary:
 	var volume: int = randi_range(ORDER_MIN_VOLUME_M3, ORDER_MAX_VOLUME_M3)
@@ -114,7 +118,6 @@ func _roll_customer_order_wait_seconds() -> int:
 func _representative_effective_price() -> float:
 	var wood_price: float = float(state.get("order_softwood_price_per_m3", 1250))
 	var delivery_price: float = float(state.get("order_delivery_price_per_km", 10))
-	# Průměrný zákazník: 3,5 m³ ve vzdálenosti 17,5 km.
 	return wood_price + (17.5 * delivery_price) / 3.5
 
 func _wait_range_for_effective_price(price: float) -> Vector2:
@@ -188,9 +191,14 @@ func _render_orders_draft(box: VBoxContainer) -> void:
 	help.text="?"
 	help.custom_minimum_size=Vector2(36,36)
 	help.add_theme_font_size_override("font_size",16)
-	help.tooltip_text="Cena dřeva a dopravy společně ovlivňují, jak často budou přicházet větší objednávky. Nižší celková cena zvyšuje poptávku, vyšší ji snižuje. Vzdálenost zákazníků je 5–30 km, takže dražší sazba za km se projeví hlavně u vzdálenějších objednávek. Velikost objednávky také ovlivní, jak výrazně se doprava promítne do výsledné ceny na m³."
+	help.tooltip_text="Cena dřeva a dopravy společně ovlivňují, jak často budou přicházet větší objednávky. Nižší celková cena zvyšuje poptávku, vyšší ji snižuje. Vzdálenost zákazníků je 5–30 km, takže dražší sazba za km se projeví hlavně u vzdálenějších objednávek."
 	help.pressed.connect(_show_order_pricing_help)
 	header.add_child(help)
+
+	var active: Dictionary = state.get("customer_active_order", {}) as Dictionary
+	if not active.is_empty():
+		box.add_child(make_label("Přijatá objednávka",15))
+		_add_active_customer_order_card(box, active)
 
 	box.add_child(make_label("Poptávky zákazníků",15))
 	var offers: Array = state.get("customer_order_offers", []) as Array
@@ -200,9 +208,9 @@ func _render_orders_draft(box: VBoxContainer) -> void:
 	var now: int = int(Time.get_unix_time_from_system())
 	for item: Variant in offers:
 		if item is Dictionary:
-			_add_customer_order_card(box, item as Dictionary, now)
+			_add_customer_order_card(box, item as Dictionary, now, not active.is_empty())
 
-func _add_customer_order_card(box: VBoxContainer, order: Dictionary, now: int) -> void:
+func _add_customer_order_card(box: VBoxContainer, order: Dictionary, now: int, has_active: bool) -> void:
 	var card:=PanelContainer.new()
 	card.add_theme_stylebox_override("panel",panel_style("#1a1714","#8a572b",6,1))
 	box.add_child(card)
@@ -228,6 +236,128 @@ func _add_customer_order_card(box: VBoxContainer, order: Dictionary, now: int) -
 	var total:=make_label("%d Kč" % int(order.get("total_price", 0)),18)
 	total.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
 	row.add_child(total)
+	var actions:=VBoxContainer.new()
+	actions.add_theme_constant_override("separation",6)
+	row.add_child(actions)
+	var accept:=Button.new()
+	accept.text="PŘIJMOUT"
+	accept.custom_minimum_size=Vector2(110,34)
+	accept.disabled=has_active
+	if has_active:
+		accept.tooltip_text="Nejdřív dokonči přijatou objednávku."
+	accept.pressed.connect(_accept_customer_order.bind(int(order.get("id",0))))
+	actions.add_child(accept)
+	var reject:=Button.new()
+	reject.text="ODMÍTNOUT"
+	reject.custom_minimum_size=Vector2(110,34)
+	reject.pressed.connect(_reject_customer_order.bind(int(order.get("id",0))))
+	actions.add_child(reject)
+
+func _add_active_customer_order_card(box: VBoxContainer, order: Dictionary) -> void:
+	var card:=PanelContainer.new()
+	card.add_theme_stylebox_override("panel",panel_style("#171411","#c18444",7,2))
+	box.add_child(card)
+	var margin:=MarginContainer.new()
+	margin.add_theme_constant_override("margin_left",14)
+	margin.add_theme_constant_override("margin_right",14)
+	margin.add_theme_constant_override("margin_top",12)
+	margin.add_theme_constant_override("margin_bottom",12)
+	card.add_child(margin)
+	var content:=VBoxContainer.new()
+	content.add_theme_constant_override("separation",6)
+	margin.add_child(content)
+	var volume: float = float(order.get("volume_m3",0.0))
+	var delivered: float = clampf(float(order.get("delivered_m3",0.0)),0.0,volume)
+	var distance: int = int(order.get("distance_km",0))
+	var title:=make_label("%.1f / %.1f m³ odvezeno" % [delivered,volume],18)
+	title.add_theme_color_override("font_color",Color("#ffca42"))
+	content.add_child(title)
+	content.add_child(make_label("Zákazník: %d km • Zakázka: %d Kč" % [distance,int(order.get("total_price",0))],14))
+	var progress:=ProgressBar.new()
+	progress.max_value=maxf(0.001,volume)
+	progress.value=delivered
+	progress.show_percentage=false
+	progress.custom_minimum_size.y=14
+	content.add_child(progress)
+	content.add_child(make_label(_active_order_transport_text(order),13))
+
+func _active_order_transport_text(order: Dictionary) -> String:
+	var transport: Node = get_node_or_null("/root/TransportUI")
+	var selected: String = str(state.get("transport_tool",""))
+	if transport != null and transport.has_method("get_selected_transport_tool"):
+		selected = str(transport.call("get_selected_transport_tool", self))
+	if selected != "small_trailer":
+		return "Čeká na malý vozík za auto (0,5 m³)."
+	if float(state.get("split_m3",0.0)) <= 0.0001:
+		return "Čeká na štípané dřevo."
+	return "Vozík odváží automaticky • 0,5 m³/cesta • 10 s/km • náklad 2 Kč/km."
+
+func _accept_customer_order(order_id: int) -> void:
+	var active: Dictionary = state.get("customer_active_order", {}) as Dictionary
+	if not active.is_empty():
+		return
+	var offers: Array = state.get("customer_order_offers", []) as Array
+	for i: int in range(offers.size()):
+		if offers[i] is Dictionary and int((offers[i] as Dictionary).get("id",0)) == order_id:
+			var accepted: Dictionary = (offers[i] as Dictionary).duplicate(true)
+			accepted["accepted_at"] = int(Time.get_unix_time_from_system())
+			accepted["delivered_m3"] = 0.0
+			state["customer_active_order"] = accepted
+			offers.remove_at(i)
+			state["customer_order_offers"] = offers
+			save_game()
+			_refresh_orders_view()
+			return
+
+func _reject_customer_order(order_id: int) -> void:
+	var offers: Array = state.get("customer_order_offers", []) as Array
+	for i: int in range(offers.size() - 1, -1, -1):
+		if offers[i] is Dictionary and int((offers[i] as Dictionary).get("id",0)) == order_id:
+			offers.remove_at(i)
+			break
+	state["customer_order_offers"] = offers
+	save_game()
+	_refresh_orders_view()
+
+func has_active_customer_order() -> bool:
+	var active: Variant = state.get("customer_active_order", {})
+	return active is Dictionary and not (active as Dictionary).is_empty()
+
+func get_customer_order_delivery_amount(max_amount: float) -> float:
+	var active: Dictionary = state.get("customer_active_order", {}) as Dictionary
+	if active.is_empty():
+		return 0.0
+	var remaining: float = maxf(0.0, float(active.get("volume_m3",0.0)) - float(active.get("delivered_m3",0.0)))
+	return minf(max_amount, remaining)
+
+func get_customer_order_distance_km() -> float:
+	var active: Dictionary = state.get("customer_active_order", {}) as Dictionary
+	return float(active.get("distance_km",0.0)) if not active.is_empty() else 0.0
+
+func register_customer_order_delivery(amount: float) -> Dictionary:
+	var active: Dictionary = state.get("customer_active_order", {}) as Dictionary
+	if active.is_empty() or amount <= 0.0:
+		return {"ok":false,"completed":false,"payout":0.0}
+	var volume: float = float(active.get("volume_m3",0.0))
+	var delivered: float = minf(volume, float(active.get("delivered_m3",0.0)) + amount)
+	active["delivered_m3"] = delivered
+	var completed: bool = delivered + 0.0001 >= volume
+	var payout: float = 0.0
+	if completed:
+		payout = float(active.get("total_price",0.0))
+		state["money"] = float(state.get("money",0.0)) + payout
+		state["customer_active_order"] = {}
+	else:
+		state["customer_active_order"] = active
+	if has_method("update_hud"):
+		update_hud()
+	save_game()
+	_refresh_orders_view()
+	return {"ok":true,"completed":completed,"payout":payout,"delivered_m3":delivered}
+
+func _refresh_orders_view() -> void:
+	if current_tab == "PODNIKATEL" and entrepreneur_section == "OBJEDNÁVKY":
+		call_deferred("show_tab","PODNIKATEL")
 
 func _order_expiry_text(expires_at: int, now: int) -> String:
 	var remaining: int = maxi(0, expires_at - now)
