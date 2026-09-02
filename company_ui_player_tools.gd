@@ -3,6 +3,8 @@ extends "res://company_ui_splitter.gd"
 const PLAYER_TOOL_ITEMS: Array[String] = ["wooden_axe", "sharpened_axe", "checht_axe", "fickars_axe", "frame_saw", "aku_saw", PARKSAJT_TOOL_ID, CHECHT_950_TOOL_ID, OJELO_MAG_TOOL_ID]
 const PLAYER_TRANSPORT_ITEMS: Array[String] = ["wheelbarrow", "handcart", "small_trailer"]
 
+var manual_work_tool: String = ""
+
 func _player_item_from_equipped(state: Dictionary) -> String:
 	var equipped_tool: String = str(state.get("equipped_player_tool", ""))
 	if equipped_tool != "":
@@ -99,8 +101,6 @@ func _build_left(main: Node) -> PanelContainer:
 	if box == null:
 		return panel
 
-	# Parent UI ends with the obsolete manual-splitting description. Remove it;
-	# manual splitting itself stays in the center scene.
 	for _i in range(2):
 		if box.get_child_count() > 0:
 			var obsolete: Node = box.get_child(box.get_child_count() - 1)
@@ -222,6 +222,111 @@ func _on_player_tool_selected(index: int, main: Node, selector: OptionButton) ->
 	if main.has_method("save_game"):
 		main.call("save_game")
 	call_deferred("_render_company", main)
+
+func _manual_work_duration(main: Node, tool_id: String) -> float:
+	if _tool_role(tool_id) == "splitter":
+		return float(main.call("axe_time")) if main.has_method("axe_time") else 1.8
+	return _tool_cycle_time(tool_id)
+
+func _start_chop() -> void:
+	if chop_running:
+		return
+	var main: Node = get_tree().current_scene
+	if main == null:
+		return
+	var state: Dictionary = _state(main)
+	var tool_id: String = _player_item_from_equipped(state)
+	var role: String = _tool_role(tool_id)
+	if role == "sawyer":
+		var input_amount: float = OJELO_MAG_SAW_IN_M3 if tool_id == OJELO_MAG_TOOL_ID else SAW_IN_M3
+		var output_amount: float = OJELO_MAG_SAW_OUT_M3 if tool_id == OJELO_MAG_TOOL_ID else SAW_OUT_M3
+		if float(state.get("logs_m3", 0.0)) + 0.0001 < input_amount:
+			if is_instance_valid(chop_timer):
+				chop_timer.text = "Nemáš klády"
+			return
+		if _storage_used(state) + (output_amount - input_amount) > STORAGE_CAPACITY + 0.0001:
+			if is_instance_valid(chop_timer):
+				chop_timer.text = "Sklad je plný"
+			return
+	elif role == "splitter":
+		if float(state.get("roundwood_m3", 0.0)) + 0.0001 < CHOP_IN_M3:
+			if is_instance_valid(chop_timer):
+				chop_timer.text = "Nemáš špalky"
+			return
+		if _storage_used(state) + (CHOP_OUT_M3 - CHOP_IN_M3) > STORAGE_CAPACITY + 0.0001:
+			if is_instance_valid(chop_timer):
+				chop_timer.text = "Sklad je plný"
+			return
+	else:
+		if is_instance_valid(chop_timer):
+			chop_timer.text = "Vyber pracovní nástroj"
+		return
+	manual_work_tool = tool_id
+	chop_running = true
+	chop_elapsed = 0.0
+	chop_duration = _manual_work_duration(main, tool_id)
+	if is_instance_valid(chop_progress):
+		chop_progress.max_value = chop_duration
+		chop_progress.value = 0.0
+	if is_instance_valid(chop_button):
+		chop_button.disabled = true
+
+func _process_chop(main: Node, delta: float) -> void:
+	if not chop_running:
+		return
+	chop_elapsed += delta
+	if is_instance_valid(chop_progress):
+		chop_progress.value = chop_elapsed
+	if is_instance_valid(chop_timer):
+		var action_text: String = "Řežu" if _tool_role(manual_work_tool) == "sawyer" else "Štípu"
+		chop_timer.text = "%s... %.1f s" % [action_text, maxf(0.0, chop_duration - chop_elapsed)]
+	if chop_elapsed < chop_duration:
+		return
+	chop_running = false
+	var state: Dictionary = _state(main)
+	var tool_id: String = manual_work_tool
+	manual_work_tool = ""
+	var completed: bool = false
+	var result_text: String = "Práce se nedokončila"
+	if _tool_role(tool_id) == "sawyer":
+		var input_amount: float = OJELO_MAG_SAW_IN_M3 if tool_id == OJELO_MAG_TOOL_ID else SAW_IN_M3
+		var output_amount: float = OJELO_MAG_SAW_OUT_M3 if tool_id == OJELO_MAG_TOOL_ID else SAW_OUT_M3
+		var available_logs: float = float(state.get("logs_m3", 0.0))
+		if available_logs + 0.0001 >= input_amount and _storage_used(state) + (output_amount - input_amount) <= STORAGE_CAPACITY + 0.0001:
+			state["logs_m3"] = maxf(0.0, available_logs - input_amount)
+			state["roundwood_m3"] = float(state.get("roundwood_m3", 0.0)) + output_amount
+			completed = true
+			result_text = "+%.3f m³ špalků" % output_amount
+	elif _tool_role(tool_id) == "splitter":
+		var available_roundwood: float = float(state.get("roundwood_m3", 0.0))
+		var split_input: float = CHOP_IN_M3
+		var split_output: float = CHOP_OUT_M3
+		var bonus: bool = false
+		if tool_id == "fickars_axe" and randf() < FICKARS_BONUS_CHANCE:
+			var bonus_growth: float = FICKARS_BONUS_OUT_M3 - FICKARS_BONUS_IN_M3
+			if available_roundwood + 0.0001 >= FICKARS_BONUS_IN_M3 and _storage_used(state) + bonus_growth <= STORAGE_CAPACITY + 0.0001:
+				split_input = FICKARS_BONUS_IN_M3
+				split_output = FICKARS_BONUS_OUT_M3
+				bonus = true
+		if available_roundwood + 0.0001 >= split_input and _storage_used(state) + (split_output - split_input) <= STORAGE_CAPACITY + 0.0001:
+			state["roundwood_m3"] = maxf(0.0, available_roundwood - split_input)
+			state["split_m3"] = float(state.get("split_m3", 0.0)) + split_output
+			completed = true
+			result_text = "+0,030 m³ štípaného • BONUS" if bonus else "+0,015 m³ štípaného"
+	if completed:
+		main.set("state", state)
+		if main.has_method("update_hud"):
+			main.call("update_hud")
+		if main.has_method("save_game"):
+			main.call("save_game")
+	if is_instance_valid(chop_timer):
+		chop_timer.text = result_text
+	if is_instance_valid(chop_progress):
+		chop_progress.value = 0.0
+	if is_instance_valid(chop_button):
+		chop_button.disabled = false
+	_refresh_storage_label(main)
+	_refresh_smelinar(main)
 
 func _selected_transport(main: Node) -> String:
 	var transport: Node = get_node_or_null("/root/TransportUI")
