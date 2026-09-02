@@ -1,4 +1,4 @@
-extends "res://main_career.gd"
+extends "res://main_orders_pricing.gd"
 
 const FIRST_PROPERTY_DEPOSIT: float = 10000.0
 const FIRST_PROPERTY_DAILY_RENT: float = 2000.0
