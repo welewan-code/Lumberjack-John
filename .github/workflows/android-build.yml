@@ -1,0 +1,32 @@
+name: Android Test Build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Godot export templates
+        run: |
+          mkdir -p /github/home/.local/share/godot/export_templates/4.3.stable
+          cp -r /root/.local/share/godot/export_templates/4.3.stable/* /github/home/.local/share/godot/export_templates/4.3.stable/
+
+      - name: Build Android APK
+        run: |
+          mkdir -p build
+          godot --headless --path . --export-debug "Android" build/LumberjackJohn.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LumberjackJohn-Android
+          path: build/LumberjackJohn.apk
+          if-no-files-found: error
